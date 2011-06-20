@@ -1,0 +1,45 @@
+\relax 
+\citation{r_team:2010:R}
+\citation{bates:2010:lme4}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Multilevel linear models}{2}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Covariance decompositions}{2}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Fitting models}{3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Calling blmer}{3}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Types, families, and options for priors on covariance components corresponding to the unobserved variables. The defaults correspond to fitting a standard, multilevel linear model. In the case of a generalized linear model, any reference to the standard deviation of the observations is replaced by 1. (TODO: seems reasonable for logistic. What about other glms?)\relax }}{4}}
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:covariance_prior_options}{{1}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Covariance prior}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Covariance examples}{5}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Fixed effect prior}{7}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Families and options for priors on the ``fixed effect'' components of the model, $\beta $. TODO: what priors make sense? Took parameterization of multivariate-t from \texttt  {pmvt}, which is in {\fontseries  {b}\selectfont  mvtnorm}.\relax }}{8}}
+\newlabel{tab:fixef_prior_options}{{2}{8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Fixed effects examples}{8}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Families and options for priors on the observation-level variance component, $\sigma ^2$.\relax }}{9}}
+\newlabel{tab:observation_variance_prior_options}{{3}{9}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6}Observation variance prior}{9}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Full Bayesian inference}{9}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}sim() results}{9}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Posterior form}{10}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Illustrative example}{10}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Fitting the models}{11}}
+\newlabel{fig:spectral_comparison:eigenvalues}{{1a}{12}}
+\newlabel{sub@fig:spectral_comparison:eigenvalues}{{(a)}{a}}
+\newlabel{fig:spectral_comparison:contours}{{1b}{12}}
+\newlabel{sub@fig:spectral_comparison:contours}{{(b)}{b}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces (a) Comparison of eigenvalues from the maximum likelihood fit and the posterior mode, using a spectral decomposition with $\Lambda _{[jj]} \sim \Gamma (2, 1)$. (b) Comparison of contours of equiprobability, viewing the first two components of the estimated posterior mode in the first two principal components from the maximum likelihood estimate. Lines correspond to 0.05, 0.25, 0.5, 0.75, and 0.95 probability of new observations have more extreme distances from the origin. \relax }}{12}}
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {}}}{12}}
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {}}}{12}}
+\newlabel{fig:spectral_comparison}{{1}{12}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Comparison of results}{12}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Binned residual plots for maximum likelihood and posterior mode estimates. The black dots and solid gray lines correspond to the binned residuals and approximate 95\% confidence intervals for the MLE, while the red triangles and dashed lines are the same, respectively, for the posterior mode.   TODO: I think this plot should be redone, identifying which observation ends up in which bin and making sure that they stay consistent between the models. I suspect that the majority of the difference in the plots arises from observations jumping bin boundaries.\relax }}{13}}
+\newlabel{fig:binned_residuals}{{2}{13}}
+\bibstyle{plainnat}
+\bibdata{blmer}
+\bibcite{bates:2010:lme4}{{1}{2010}{{Bates and Maechler}}{{}}}
+\bibcite{r_team:2010:R}{{2}{2010}{{R Development Core Team}}{{}}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Full Bayesian inference}{14}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Availability}{14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Installing the package}{14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Obtaining the source code}{14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}License}{14}}

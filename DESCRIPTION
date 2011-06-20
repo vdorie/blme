@@ -1,0 +1,17 @@
+Package: blme
+Version: 0.01-0
+Date: 2010-12-19
+Title: Bayesian Linear Mixed-Effects models
+Author: Vincent Dorie <vincent@stat.columbia.edu>
+Maintainer: Vincent Dorie <vincent@stat.columbia.edu>
+Description: Maximum a posteriori estimation for linear and generalized
+        linear mixed-effects models in a Bayesian setting. Extends lme4
+        by Douglas Bates and Martin Maechler.
+Depends: methods, R(>= 2.9.2), Matrix(>= 0.999375-11), lme4(>=
+        0.999375-37)
+LinkingTo: Matrix, stats
+Imports: lme4, Matrix
+Suggests: RUnit
+LazyLoad: yes
+LazyData: yes
+License: GPL (>= 2)
