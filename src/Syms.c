@@ -51,3 +51,21 @@ SEXP attribute_hidden
     blme_prior_familiesSym,
     blme_prior_scalesSym,
     blme_prior_hyperparametersSym;
+
+
+/**
+ * Extract the slot named nm from the object obj and return a null pointer
+ * if the slot has length 0 or a pointer to the REAL contents.
+ *
+ * @param obj pointer to an S4 object
+ * @param nm pointer to a symbol naming the slot to extract
+ * 
+ * @return pointer to the REAL contents, if nonzero length, otherwise
+ * a NULL pointer 
+ *
+ */
+double *SLOT_REAL_NULL(SEXP obj, SEXP nm)
+{
+  SEXP pt = GET_SLOT(obj, nm);
+  return LENGTH(pt) ? REAL(pt) : (double*) NULL;
+}

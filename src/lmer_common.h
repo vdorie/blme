@@ -27,16 +27,8 @@ getSparseContentAndStructure(const SEXP stExpression, const int *sparseRowForFac
  *
  * @return idnex of assicated factor
  */
-R_INLINE int getFactorForSparseRow(int row, int numFactors,
-                                   const int *sparseRowsForFactor)
-{
-
-  for (int factor = 0; factor < numFactors; ++factor) {
-    if (row < sparseRowsForFactor[factor + 1]) return factor;
-  }
-  error("invalid row index %d (max is %d)", row, sparseRowsForFactor[numFactors]);
-  return -1;                  /* -Wall */
-}
+int getFactorForSparseRow(int row, int numFactors,
+                          const int *sparseRowsForFactor);
 
 /**
  * Permute the vector src according to perm into dest
@@ -50,18 +42,8 @@ R_INLINE int getFactorForSparseRow(int row, int numFactors,
  *
  * \note If perm is NULL the first n elements of src are copied to dest.
  */
-R_INLINE double*
-applyPermutation(double *destination, const double *source, const int *permutation, int numValues)
-{
-  if (permutation == NULL) {
-    Memcpy(destination, source, numValues);
-  } else {
-    for (int i = 0; i < numValues; ++i) {
-      destination[i] = source[permutation[i]];
-    }
-  }
-  return destination;
-}
+double*
+applyPermutation(double *destination, const double *source, const int *permutation, int numValues);
 
 /**
  * Return the sum of squares of the first n elements of x
@@ -71,12 +53,7 @@ applyPermutation(double *destination, const double *source, const int *permutati
  *
  * @return sum of squares
  */
-R_INLINE double getSumOfSquares(const double *x, int n)
-{
-  double ans = 0.0;
-  for (int i = 0; i < n; ++i) ans += x[i] * x[i];
-  return(ans);
-}
+double getSumOfSquares(const double *x, int n);
 
 
 // dest = PAX, A is sparse, X is dense and the

@@ -75,11 +75,7 @@ SEXP attribute_hidden
  * a NULL pointer 
  *
  */
-static R_INLINE double *SLOT_REAL_NULL(SEXP obj, SEXP nm)
-{
-  SEXP pt = GET_SLOT(obj, nm);
-  return LENGTH(pt) ? REAL(pt) : (double*) NULL;
-}
+double *SLOT_REAL_NULL(SEXP obj, SEXP nm);
 
 /** Return the integer pointer to the dims slot */
 #define DIMS_SLOT(x) INTEGER(GET_SLOT(x, lme4_dimsSym))

@@ -54,6 +54,65 @@ getSparseContentAndStructure(const SEXP stExpression, const int *sparseRowForFac
   sparseMatrixStructure->maxFactorDimension = maxFactorDimension;
 }
 
+/**
+ * Return the index of the factor associated with parameter index ind
+ *
+ * @param ind an index in [0, Gp[nt] - 1]
+ * @param nt total number of terms
+ * @param Gp group pointers, a vector of length nt+1 with Gp[0] = 0
+ *
+ * @return idnex of assicated factor
+ */
+int getFactorForSparseRow(int row, int numFactors, const int *sparseRowsForFactor)
+{
+  
+  for (int factor = 0; factor < numFactors; ++factor) {
+    if (row < sparseRowsForFactor[factor + 1]) return factor;
+  }
+  error("invalid row index %d (max is %d)", row, sparseRowsForFactor[numFactors]);
+  return -1;                  /* -Wall */
+}
+
+
+/**
+ * Permute the vector src according to perm into dest
+ *
+ * @param dest destination
+ * @param src source
+ * @param perm NULL or 0-based permutation of length n
+ * @param n length of src, dest and perm
+ *
+ * @return dest
+ *
+ * \note If perm is NULL the first n elements of src are copied to dest.
+ */
+double*
+applyPermutation(double *destination, const double *source, const int *permutation, int numValues)
+{
+  if (permutation == NULL) {
+    Memcpy(destination, source, numValues);
+  } else {
+    for (int i = 0; i < numValues; ++i) {
+      destination[i] = source[permutation[i]];
+    }
+  }
+  return destination;
+}
+
+/**
+ * Return the sum of squares of the first n elements of x
+ *
+ * @param n
+ * @param x
+ *
+ * @return sum of squares
+ */
+double getSumOfSquares(const double *x, int n)
+{
+  double ans = 0.0;
+  for (int i = 0; i < n; ++i) ans += x[i] * x[i];
+  return(ans);
+}
 
 /**
  * Create PAX in dest.
