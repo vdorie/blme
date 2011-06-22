@@ -284,7 +284,6 @@ int getSpectralDecompositionOfPositiveDefiniteMatrix(double *source, int dim,
   int optimalIntegerWorkLength = 0;
   int integerWorkLength = -1;
   
-  int failureIndices[dim];
   int integerSupport[2 * dim];
   int lapackResult;
   

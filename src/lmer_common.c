@@ -100,21 +100,6 @@ applyPermutation(double *destination, const double *source, const int *permutati
 }
 
 /**
- * Return the sum of squares of the first n elements of x
- *
- * @param n
- * @param x
- *
- * @return sum of squares
- */
-double getSumOfSquares(const double *x, int n)
-{
-  double ans = 0.0;
-  for (int i = 0; i < n; ++i) ans += x[i] * x[i];
-  return(ans);
-}
-
-/**
  * Create PAX in dest.
  *
  * @param dest values to be calculated

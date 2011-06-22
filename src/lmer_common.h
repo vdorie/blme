@@ -45,17 +45,6 @@ int getFactorForSparseRow(int row, int numFactors,
 double*
 applyPermutation(double *destination, const double *source, const int *permutation, int numValues);
 
-/**
- * Return the sum of squares of the first n elements of x
- *
- * @param n
- * @param x
- *
- * @return sum of squares
- */
-double getSumOfSquares(const double *x, int n);
-
-
 // dest = PAX, A is sparse, X is dense and the
 // permutation is specified by an integer array
 void

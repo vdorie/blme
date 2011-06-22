@@ -19,6 +19,7 @@
 # endif
 #endif
 
+// #define PRINT_TRACE
 #ifdef PRINT_TRACE
 #  define DEBUG_PRINT_ARRAY(header, array, length) { \
      unsigned long long *_X_ = (unsigned long long *) (array); \

@@ -42,6 +42,8 @@
 #include "lmm.h"
 #include "lmer_common.h"
 
+#include "common_inlines.h"
+
 extern	       // cholmod_common struct initialized in R_init_lme4 
 cholmod_common cholmodCommon;
 

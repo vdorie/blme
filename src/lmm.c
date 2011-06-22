@@ -11,6 +11,8 @@
 #include "blmer.h"
 #include "unmodeledCoefficientPrior.h"
 
+#include "common_inlines.h"
+
 extern cholmod_common cholmodCommon;
 
 struct _MERCache {
@@ -110,7 +112,7 @@ double lmmCalculateDeviance(SEXP regression, MERCache *cache)
   CHM_SP A = A_SLOT(regression);
   R_CheckStack();
 #endif
-  DEBUG_PRINT_ARRAY("A.x", A->x, 10);
+  DEBUG_PRINT_ARRAY("A.x", A->x, ((int *) A->p)[dims[n_POS]] > 10 ? 10 : ((int *) A->p)[dims[n_POS]]);
   
   updateWeights(regression, cache);
   updateAugmentedDesignMatrixFactorizations(regression, cache);
@@ -184,15 +186,15 @@ void updateAugmentedDesignMatrixFactorizations(SEXP regression, MERCache *cache)
   R_CheckStack();
 #endif
   
-  DEBUG_PRINT_ARRAY("L.x", L->x, ((int *) L->p)[dims[q_POS]]);
+  DEBUG_PRINT_ARRAY("L.x", L->x, ((int *) L->p)[dims[q_POS]] > 10 ? 10 : ((int *) L->p)[dims[q_POS]]);
   
   updateOffDiagonalCholeskyBlock(regression, cache);
   
-  DEBUG_PRINT_ARRAY("RZX", RZX_SLOT(regression), dims[p_POS] * dims[q_POS]);
+  DEBUG_PRINT_ARRAY("RZX", RZX_SLOT(regression), dims[p_POS] * dims[q_POS] > 10 ? 10 : dims[p_POS] * dims[q_POS]);
   
   updateLowerRightCholeskyBlock(regression, cache);
   
-  DEBUG_PRINT_ARRAY("RX ", RX_SLOT(regression), dims[p_POS] * dims[p_POS]);
+  DEBUG_PRINT_ARRAY("RX ", RX_SLOT(regression), dims[p_POS] * dims[p_POS] > 10 ? 10 : dims[p_POS] * dims[p_POS]);
 }
 
 void updateDeviance(SEXP regression)
@@ -675,6 +677,11 @@ calculatePenalizedWeightedResidualSumOfSquaresFromProjections(SEXP regression, M
     (getSumOfSquares(unmodeledCoefProjection, numUnmodeledCoefs) +
      getSumOfSquares(modeledCoefProjection, numModeledCoefs));
 
+#ifdef PRINT_TRACE
+  double ssy = getSumOfSquares(response, numObservations), sstheta = getSumOfSquares(modeledCoefProjection, numModeledCoefs), ssbeta = getSumOfSquares(unmodeledCoefProjection, numUnmodeledCoefs);
+  Rprintf("ss : %llu %llu %llu %llu\n", *((unsigned long long *) (deviances + pwrss_POS)),
+	      *((unsigned long long *) &ssy), *((unsigned long long *) &sstheta), *((unsigned long long *) &ssbeta));
+#endif
   if (deviances[pwrss_POS] < 0.0) {
     error("Calculated PWRSS for a LMM is negative");
   }

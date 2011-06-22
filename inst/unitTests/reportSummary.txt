@@ -1,9 +1,0 @@
-RUNIT TEST PROTOCOL -- Mon Jun 20 19:01:47 2011 
-*********************************************** 
-Number of test functions: 10 
-Number of errors: 0 
-Number of failures: 0 
-
- 
-1 Test Suite : 
-blme unit testing - 10 test functions, 0 errors, 0 failures

@@ -42,10 +42,10 @@ double calculateGaussianDeviance(SEXP prior, double commonScale,
   double logDetCov = *hyperparameters++;
   if (scale == PRIOR_SCALE_COMMON) logDetCov += ((double) numParameters) * log(commonScale);
   
-  double result;
+  double result = 0.0;
   if (numHyperparameters == 1) {
     double sdInverse = hyperparameters[0];
-    if (scale == PRIOR_SCALE_COMMON) sdInverse / sqrt(commonScale);
+    if (scale == PRIOR_SCALE_COMMON) sdInverse /= sqrt(commonScale);
     
     result = -2.0 * dmvn(parameters, numParameters, NULL,
                          sdInverse, logDetCov, TRUE);

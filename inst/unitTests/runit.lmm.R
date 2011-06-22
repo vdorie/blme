@@ -54,3 +54,6 @@ test.blme.blmer <- function()
   checkEquals(lmerFit@ranef, blmerFit@ranef);
   checkEquals(lmerFit@fixef, blmerFit@fixef);
 }
+
+#lmerFit <- lmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), verbose=TRUE, control=list(maxIter=1L));
+#blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), verbose=TRUE, control=list(maxIter=1L), cov.prior = NULL, fixef.prior = NULL);

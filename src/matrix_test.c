@@ -344,7 +344,7 @@ static int getSpectralDecompositionOfPositiveDefiniteMatrix_test() {
   }
   
   return(allApproximatelyEqual(correctValues, eigenValues, covarianceDim, TEST_TOLERANCE) &&
-         allApproximatelyEqual(correctVectors, eigenVectors, arrayLength, TEST_TOLERANCE));
+         allApproximatelyAbsolutelyEqual(correctVectors, eigenVectors, arrayLength, TEST_TOLERANCE));
 }
 
 static int getCholeskyDecomposition_test() {
