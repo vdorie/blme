@@ -1,6 +1,6 @@
 Package: blme
-Version: 0.01-2
-Date: 2011-06-22
+Version: 0.01-3
+Date: 2011-06-23
 Title: Bayesian Linear Mixed-Effects models
 Author: Vincent Dorie <vincent@stat.columbia.edu>
 Maintainer: Vincent Dorie <vincent@stat.columbia.edu>
