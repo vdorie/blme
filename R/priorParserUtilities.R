@@ -40,16 +40,24 @@ getCoordinateNumberForName <- function(regression, factorNumber, coordinateName)
 getInputSdForUnmodeledCoefficients <- function(regression)
 {
   numUnmodeledCoef <- regression@dims[["p"]];
-  columnNames <- names(regression@fixef);
-  result <- rep(NA, numUnmodeledCoef);
-  for (i in 1:numUnmodeledCoef) {
-    if (columnNames[i] == "(Intercept)") {
-      result[i] <- 1;
-    } else {
-      result[i] <- sd(regression@frame[[columnNames[i]]]);
-      if (result[i] == 0) result[i] <- 1;
-    }
+  result <- rep(1, numUnmodeledCoef);
+
+  if (numUnmodeledCoef == 1) return(result);
+  
+  for (i in 2:numUnmodeledCoef) {
+    result[i] <- sd(regression@X[,i]);
   }
+    
+#  columnNames <- names(regression@fixef);
+#  result <- rep(NA, numUnmodeledCoef);
+#  for (i in 1:numUnmodeledCoef) {
+#    if (columnNames[i] == "(Intercept)") {
+#      result[i] <- 1;
+#    } else {
+#      result[i] <- sd(regression@frame[[columnNames[i]]]);
+#      if (result[i] == 0) result[i] <- 1;
+#    }
+#  }
 
   return(result);
 }
@@ -57,13 +65,27 @@ getInputSdForUnmodeledCoefficients <- function(regression)
 getInputSdForFactor <- function(regression, factorNumber)
 {
   factorDimension <- nrow(regression@ST[[factorNumber]]);
-  factorColumnNames <- rownames(regression@ST[[factorNumber]]);
+  factorPredictorNames <- rownames(regression@ST[[factorNumber]]);
+  fixefNames <- names(regression@fixef);    # fixef matches with X matrix
+  frameNames <- colnames(regression@frame); # in case it's in the frame but not a fixef 
+
   result <- rep(NA, factorDimension);
   for (i in 1:factorDimension) {
-    if (factorColumnNames[i] == "(Intercept)") {
+    predictorName <- factorPredictorNames[i];
+
+    if (predictorName == "(Intercept)") {
       result[i] <- 1;
     } else {
-      result[i] <- sd(regression@frame[[factorColumnNames[i]]]);
+      if (any(fixefNames == predictorName)) {
+        colNum <- which(fixefNames == predictorName);
+        result[i] <- sd(regression@X[,colNum]);
+      } else if (any(frameNames == predictorName)) {
+        colNum <- which(frameNames == predictorName);
+        result[i] <- sd(regression@frame[,colNum]);
+      } else {
+        warning("Unable to standardize input '", predictorName,
+                "' for factor number ", factorNumber, ".");
+      }
       if (result[i] == 0) result[i] <- 1;
     }
   }
@@ -189,6 +211,12 @@ buildStringForFamily <- function(families, scales, hyperparameters)
         cat("c(", toString(format(hyperparameters, digits=2, scientific=TRUE)), ")", sep="");
     }
     cat(")");
+  } else if (families[1] == getEnumOrder(familyEnumeration, POINT_FAMILY_NAME)) {
+    location <- hyperparameters;
+
+    cat("(", VALUE_HYPERPARAMETER_NAME, " = ", hyperparameters,
+        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", scaleEnumeration[scales + 1],
+        ")", sep = "");
   }
   sink();
   close(stringConnection);

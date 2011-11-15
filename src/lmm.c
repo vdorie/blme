@@ -117,32 +117,26 @@ double lmmCalculateDeviance(SEXP regression, MERCache *cache)
   updateWeights(regression, cache);
   updateAugmentedDesignMatrixFactorizations(regression, cache);
   
-  if (canProfileCommonScale(regression)) {
-    calculateProjections(regression, cache);
-    calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
-    rotateProjections(regression, cache);
-    
-    updateDeviance(regression);
-    profileCommonScale(regression);
-  } else {
-    calculateProjections(regression, cache);
-    calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
-    
+  
+  calculateProjections(regression, cache);
+  calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
+  
+  if (commonScaleRequiresOptimization(regression)) {
     double currCommonScale = deviances[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
     double prevCommonScale;
   
-    // Rprintf("starting with scale: %f\n", currCommonScale);
     do {
       prevCommonScale = currCommonScale;
       
       // implictly updates projections and pwrss
       currCommonScale = performOneStepOfNewtonsMethodForCommonScale(regression, cache);
-      // Rprintf("  updated to scale: %f\n", currCommonScale);
     } while (fabs(currCommonScale - prevCommonScale) >= COMMON_SCALE_OPTIMIZATION_TOLERANCE);
-    
-    rotateProjections(regression, cache);
-    updateDeviance(regression);
   }
+  
+  rotateProjections(regression, cache);
+  updateDeviance(regression);
+  
+  if (canProfileCommonScale(regression)) profileCommonScale(regression);
   
   return (deviances[dims[isREML_POS] ? REML_POS : ML_POS]);
 }

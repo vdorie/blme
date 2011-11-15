@@ -474,7 +474,7 @@ mer_finalize <- function(ans)
 {
     .Call(mer_optimize, ans)
     if (ans@dims[["cvg"]] > 6) warning(convergenceMessage(ans@dims[["cvg"]]))
-    .Call(mer_update_ranef, ans)
+    # Call(mer_update_ranef, ans) # blme edit: not needed, added to mer_optimize
     .Call(mer_update_mu, ans)
     ans
 }

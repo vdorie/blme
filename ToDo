@@ -1,6 +1,3 @@
-High Priority:
-  default fixed effect prior on
-
 Medium Priority:
   Fixef with non-zero mean
   Permit the permutation of scale matrices with named rows/columns to match that of the factor
@@ -14,6 +11,6 @@ Low Priority:
   Full unit tests for various priors, glm case
   Approximate optimization for common scale when there's a prior on the fixef
   t-priors on unmodeled coefficients
-  Priors on the common scale
+  Inverse gamma priors on the common scale
   Prove that way of handling Newton's method is correct
   Unify how positive definite matrices are handled from covariance and unmodeled coef parsers

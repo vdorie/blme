@@ -79,25 +79,39 @@ parseUnmodeledCoefficientNormalPrior <- function(regression, specification, call
   # references
   namedOptionsRef   <- list(env = sys.frame(sys.nframe()), var = "namedOptions");
   unnamedOptionsRef <- list(env = sys.frame(sys.nframe()), var = "unnamedOptions");
-  
-  
-  prior <- list(family = NORMAL_FAMILY_NAME);
 
-  standardDeviation <- getPriorOption(SD_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
-  covariance <- NULL;
-  if (is.null(standardDeviation)) {
-    covariance <- getPriorOption(COVARIANCE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
-  } else {
-    covariance <- standardDeviation^2;
+  family <- NORMAL_FAMILY_NAME; # would otherwise be passed in, but nothing else is supported
+  
+  fillDefaults <- function(x, ...) x;
+  if (family == NORMAL_FAMILY_NAME) {
+    prior <- list(family = NORMAL_FAMILY_NAME);
+
+    standardDeviation <- getPriorOption(SD_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
+    covariance <- NULL;
+    if (is.null(standardDeviation)) {
+      covariance <- getPriorOption(COVARIANCE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
+    } else {
+      covariance <- standardDeviation^2;
+    }
+    prior$covarianceScale <- getPriorOption(COVARIANCE_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+  
+    if (!is.null(covariance) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
+    prior[["covariance"]] <- covariance;
+    prior$dataScale <- dataScale;
+
+    fillDefaults <- getUnmodeledCoefficientNormalDefaults;
   }
-  prior$covarianceScale <- getPriorOption(COVARIANCE_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
-  dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+
+  if (length(namedOptions) > 0) {
+    warning("Unrecognized prior option(s) for ", family, " family: ",
+            toString(names(namedOptions)), ".");
+  }
+  if (length(unnamedOptions) > 0) {
+    warning("Extra option(s) for ", family, " family: ", toString(unnamedOptions), ".");
+  }
   
-  if (!is.null(covariance) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
-  prior[["covariance"]] <- covariance;
-  prior$dataScale <- dataScale;
-  
-  prior <- getUnmodeledCoefficientNormalDefaults(prior);
+  prior <- fillDefaults(prior);
 
   return(prior);
 }

@@ -2,3 +2,7 @@
 
 	* Initial version.
 
+2011-11-15 17:03  Vincent Dorie <vincent@stat.columbia.edu>
+
+        * Fixed a bug related to the scaling of priors to the data in the presence of interactions.
+        * Added point priors on the common scale, enabling meta-analyses.

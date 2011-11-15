@@ -577,10 +577,14 @@ static double update_mu(SEXP x)
   /* store u'u */
   d[usqr_POS] = getSumOfSquares((double*)(cu->x), dims[q_POS]);
   d[pwrss_POS] = d[usqr_POS] + d[wrss_POS];
-  d[sigmaML_POS] = sqrt(d[pwrss_POS]/
+  // blme edit
+  if (canProfileCommonScale(x)) {
+    d[sigmaML_POS] = sqrt(d[pwrss_POS]/
                         (srwt ? getSumOfSquares(srwt, n) : (double) n));
-  d[sigmaREML_POS] = (gradient || muEta) ? NA_REAL :
-	  d[sigmaML_POS] * sqrt((((double) n)/((double)(n - p))));
+    d[sigmaREML_POS] = (gradient || muEta) ? NA_REAL :
+      d[sigmaML_POS] * sqrt((((double) n)/((double)(n - p))));
+  }
+  // blme end
   return d[pwrss_POS];
 }
 

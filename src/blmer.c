@@ -32,10 +32,10 @@ static const char *priorTypeNames[] = {
 // these names are exported to R
 static const char *priorFamilyNames[] = {
   "flat", "gamma", "inverse.gamma", "wishart", "inverse.wishart",
-  "normal", "mvt"
+  "normal", "mvt", "point"
 };
 static const char *priorFamilyAbbreviations[] = {
-  "   1", "gamm", "igam", "wish", "iwsh", "nrml", " mvt"
+  "   1", "gamm", "igam", "wish", "iwsh", "nrml", " mvt", " pnt"
 };
 
 static const char *priorScaleNames[] = {
@@ -200,8 +200,22 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
     Memcpy(parameters, unmodeledCoefficients, numUnmodeledCoefficients);
     parameters += numUnmodeledCoefficients;
   }
+  
   if (parametersIncludeCommonScale(regression)) {
     *parameters++ = DEV_SLOT(regression)[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
+  } else {
+    SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
+    priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
+    
+    if (priorType == PRIOR_TYPE_DIRECT &&
+        PRIOR_FAMILY_POINT == PRIOR_FAMILIES_SLOT(commonScalePrior)[0]) {
+      double commonScale = PRIOR_HYPERPARAMETERS_SLOT(commonScalePrior)[0];
+      
+      if (PRIOR_SCALES_SLOT(commonScalePrior)[0] == PRIOR_SCALE_VARIANCE) commonScale = sqrt(commonScale);
+      
+      double* dev = DEV_SLOT(regression);
+      dev[sigmaML_POS] = dev[sigmaREML_POS] = commonScale;
+    }
   }
 }
 
@@ -420,8 +434,17 @@ int canProfileCommonScale(SEXP regression)
   int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
   if (!isLinearModel) return(TRUE); // question doesn't apply if is !lmm
   
+  SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
+  priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
+  
+  if (priorType == PRIOR_TYPE_DIRECT &&
+      PRIOR_FAMILY_POINT == PRIOR_FAMILIES_SLOT(commonScalePrior)[0]) {
+    // prior is a point mass, nothing to do
+    return(FALSE);
+  }
+  
   SEXP unmodeledCoefficientPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
-  priorType_t priorType = PRIOR_TYPE_SLOT(unmodeledCoefficientPrior);
+  priorType = PRIOR_TYPE_SLOT(unmodeledCoefficientPrior);
   
   if (priorType == PRIOR_TYPE_NONE) return(TRUE);
   
@@ -431,6 +454,34 @@ int canProfileCommonScale(SEXP regression)
     if (scale == PRIOR_SCALE_COMMON) return(TRUE);
   }
   return(FALSE);
+}
+
+int commonScaleRequiresOptimization(SEXP regression)
+{
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  if (!isLinearModel) return(FALSE); // question doesn't apply if is !lmm
+  
+  SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
+  priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
+  
+  if (priorType == PRIOR_TYPE_DIRECT &&
+      PRIOR_FAMILY_POINT == PRIOR_FAMILIES_SLOT(commonScalePrior)[0]) {
+    // prior is a point mass, nothing to do
+    return(FALSE);
+  }
+  
+  SEXP unmodeledCoefficientPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
+  priorType = PRIOR_TYPE_SLOT(unmodeledCoefficientPrior);
+  
+  if (priorType == PRIOR_TYPE_NONE) return(FALSE);
+  
+  if (priorType == PRIOR_TYPE_DIRECT) {
+    priorScale_t scale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
+    
+    if (scale == PRIOR_SCALE_COMMON) return(FALSE);
+  }
+  
+  return(TRUE);
 }
 
 /**

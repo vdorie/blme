@@ -21,9 +21,11 @@ loadConstants <- function(env) {
   env$INVGAMMA_FAMILY_NAME   <- familyEnumeration[3];
   env$WISHART_FAMILY_NAME    <- familyEnumeration[4];
   env$INVWISHART_FAMILY_NAME <- familyEnumeration[5];
-
+  
   env$NORMAL_FAMILY_NAME     <- familyEnumeration[6]; # for fixed effects
   env$MVT_FAMILY_NAME        <- familyEnumeration[7];
+
+  env$POINT_FAMILY_NAME      <- familyEnumeration[8]; # for common scale
 
   # scales determine how the prior shold be applied
   env$SD_SCALE_NAME       <- scaleEnumeration[1]; # variances
@@ -37,6 +39,7 @@ loadConstants <- function(env) {
                                            FLAT_FAMILY_NAME, GAMMA_FAMILY_NAME, INVGAMMA_FAMILY_NAME,
                                            WISHART_FAMILY_NAME, INVWISHART_FAMILY_NAME);
   env$SUPPORTED_UNMODELED_COEFFICIENT_FAMILY_NAMES <- c(NONE_TYPE_NAME, FLAT_FAMILY_NAME, NORMAL_FAMILY_NAME);
+  env$SUPPORTED_COMMON_SCALE_FAMILY_NAMES <- c(NONE_TYPE_NAME, FLAT_FAMILY_NAME, POINT_FAMILY_NAME);
   env$UNIVARIATE_FAMILY_NAMES <- c(GAMMA_FAMILY_NAME, INVGAMMA_FAMILY_NAME);
   env$MULTIVARIATE_FAMILY_NAMES <- c(WISHART_FAMILY_NAME, INVWISHART_FAMILY_NAME);
   env$ALL_FAMILY_NAMES <- c(UNIVARIATE_FAMILY_NAMES, MULTIVARIATE_FAMILY_NAMES);
@@ -49,6 +52,7 @@ loadConstants <- function(env) {
   env$INVERSE_SCALE_HYPERPARAMETER_NAME <- "inverse.scale"
   env$SD_HYPERPARAMETER_NAME <- "sd";
   env$COVARIANCE_HYPERPARAMETER_NAME <- "cov";
+  env$VALUE_HYPERPARAMETER_NAME <- "value";
 
   # scale-ish things for variance components
   env$POSTERIOR_SCALE_OPTION_NAME <- "posterior.scale";
@@ -74,5 +78,9 @@ loadConstants <- function(env) {
 
   env$unmodeledCoefficientPriorSpecificationPattern <-
     paste("^\\s*(", flattenStrings(SUPPORTED_UNMODELED_COEFFICIENT_FAMILY_NAMES, "|"),
+          ")\\s*(?:\\((.*)\\))?\\s*$", sep="");
+
+  env$commonScalePriorSpecificationPattern <-
+    paste("^\\s*(", flattenStrings(SUPPORTED_COMMON_SCALE_FAMILY_NAMES, "|"),
           ")\\s*(?:\\((.*)\\))?\\s*$", sep="");
 }

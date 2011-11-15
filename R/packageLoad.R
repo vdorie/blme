@@ -11,4 +11,5 @@
   loadConstants(namespace);
   loadCovarianceDefaults(namespace);
   loadUnmodeledCoefficientDefaults(namespace);
+  loadCommonScaleDefaults(namespace);
 }

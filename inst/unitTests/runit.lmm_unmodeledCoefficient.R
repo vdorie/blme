@@ -357,6 +357,6 @@ test.bmer.blmer.fixefPrior <- function()
                    fixef.prior = "normal");
   ignored <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
                    cov.prior = NULL,
-                   fixef.prior = "normal(cov = diag(0.5, 2), posterior.scale='absolute')");
+                   fixef.prior = "normal(cov = diag(0.5, 2), data.scale='absolute')");
   options(warn = 0);
 }

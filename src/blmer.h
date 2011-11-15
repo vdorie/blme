@@ -26,6 +26,7 @@ void guaranteeValidPrior(SEXP regression); // installs an empty prior if none is
 int parametersIncludeUnmodeledCoefs(SEXP regression);
 int parametersIncludeCommonScale(SEXP regression);
 int canProfileCommonScale(SEXP regression);
+int commonScaleRequiresOptimization(SEXP regression);
 
 // the following exposes our enumerations to R in the form an ordered vector of strings
 SEXP bmer_getTypeEnumeration();
@@ -56,6 +57,8 @@ typedef enum {
   
   PRIOR_FAMILY_GAUSSIAN,     // priors on fixef
   PRIOR_FAMILY_MVT,
+  
+  PRIOR_FAMILY_POINT,        // priors on common scale
   
   PRIOR_FAMILY_END
 } priorFamily_t;
