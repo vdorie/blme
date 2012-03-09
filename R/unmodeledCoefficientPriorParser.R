@@ -185,19 +185,19 @@ unmodeledCoefficientPriorToString <- function(regression)
 {
   if (regression@fixef.prior@type == getEnumOrder(typeEnumeration, NONE_TYPE_NAME))
     return(character(0));
-  
 
+  
   families <- regression@fixef.prior@families;
   scales <- regression@fixef.prior@scales;
   hyperparameters <- regression@fixef.prior@hyperparameters;
 
   numUnmodeledCoefficients <- regression@dims[["p"]];
   if (length(hyperparameters) == 1 + 1) {
-    # just a single variance
-    hyperparameters <- 1 / hyperparameters[2];
+    # just a single sd
+    hyperparameters <- 1 / hyperparameters[2]^2;
   } else if (length(hyperparameters) == 1 + numUnmodeledCoefficients) {
-    # diagonal variance
-    hyperparameters <- 1 / hyperparameters[1 + 1:numUnmodeledCoefficients];
+    # diagonal of sd
+    hyperparameters <- 1 / hyperparameters[1 + 1:numUnmodeledCoefficients]^2;
   } else {
     # full matrix
     covarianceInverse <- matrix(hyperparameters[1 + numUnmodeledCoefficients^2 +
@@ -207,5 +207,5 @@ unmodeledCoefficientPriorToString <- function(regression)
     hyperparameters <- as.numeric(solve(covarianceInverse));
   }
 
-  return(buildStringForFamily(families, scales, hyperparameters));
+  return(buildStringForFamily(families, scales, hyperparameters, TRUE)$string);
 }

@@ -12,8 +12,8 @@ static int multiplyMatricesWithTranspose_test();
 static int singleMatrixCrossproduct_test();
 static int singleTriangularMatrixCrossproduct_test();
 static int singleMatrixCrossproductWithUpdate_test();
-static int multiplyMatrixByVector_test();
-static int multiplyMatrixByVectorWithUpdate_test();
+static int applyMatrixToVector_test();
+static int applyMatrixToVectorWithUpdate_test();
 static int transposeMatrix_test();
 static int solveSystem_test();
 static int solveSymmetricSystem_test();
@@ -71,9 +71,9 @@ SEXP bmer_matrixTest() {
   
   if (!singleMatrixCrossproductWithUpdate_test()) error("singleMatrixCrossproductWithUpdate_test() failed.");
   
-  if (!multiplyMatrixByVector_test()) error("multiplyMatrixByVector_test() failed.");
+  if (!applyMatrixToVector_test()) error("applyMatrixToVector_test() failed.");
   
-  if (!multiplyMatrixByVectorWithUpdate_test()) error("multiplyMatrixByVectorWithUpdate_test() failed.");
+  if (!applyMatrixToVectorWithUpdate_test()) error("applyMatrixToVectorWithUpdate_test() failed.");
   
   if (!transposeMatrix_test()) error("transposeMatrix_test() failed.");
   
@@ -185,28 +185,28 @@ static int singleMatrixCrossproductWithUpdate_test() {
   return (allApproximatelyEqual(updateMatrix, correctAnswer, arrayLength, TEST_TOLERANCE));
 }
 
-static int multiplyMatrixByVector_test() {
+static int applyMatrixToVector_test() {
   int arrayLength = testMatrix1Rows;
   
   double correctAnswer[] = { 0.35457178346387, 0.0343816817133231, 0.20314407828111, 0.312932333295974 };
   double result[arrayLength];
   
-  multiplyMatrixByVector(testMatrix1, testMatrix1Rows, testMatrix1Columns, FALSE,
-                 testMatrix2 /* just use first testMatrix1Columns elements of testMatrix2 */,
-                 result);
+  applyMatrixToVector(testMatrix1, testMatrix1Rows, testMatrix1Columns, FALSE,
+                      testMatrix2 /* just use first testMatrix1Columns elements of testMatrix2 */,
+                      result);
 
   return (allApproximatelyEqual(result, correctAnswer, arrayLength, TEST_TOLERANCE));
 }
   
-static int multiplyMatrixByVectorWithUpdate_test()
+static int applyMatrixToVectorWithUpdate_test()
 {
   int arrayLength = testMatrix1Rows;
   
   double result[] = { 0.490900602890179, 0.346424098825082, 0.138162745162845, 0.249486767454073 };
   double correctAnswer[] = { 0.84547238635405, 0.380805780538405, 0.341306823443955, 0.562419100750047 };
   
-  multiplyMatrixByVectorWithUpdate(testMatrix1, testMatrix1Rows, testMatrix1Columns, FALSE,
-                           testMatrix2, 1.0, result);
+  applyMatrixToVectorWithUpdate(testMatrix1, testMatrix1Rows, testMatrix1Columns, FALSE,
+                                testMatrix2, 1.0, result);
  
   return (allApproximatelyEqual(result, correctAnswer, arrayLength, TEST_TOLERANCE)); 
 }

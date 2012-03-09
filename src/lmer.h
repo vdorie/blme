@@ -6,7 +6,7 @@
  * GET_SLOT, MAKE_CLASS, NEW_OBJECT, SET_SLOT, etc. */
 #include <Rdefines.h>
 
-#include "Syms.h"
+// #include "Syms.h"
 
 /** positions in the deviance vector */
 enum devP {

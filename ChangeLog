@@ -1,8 +1,19 @@
-2010-12-19 19:27  Vincent Dorie <vincent@stat.columbia.edu>
+2012-03-09 13:01  Vincent Dorie <vincent@stat.columbia.edu>
 
-	* Initial version.
+	* Fixed off-by one bug on termination of the optimization loop which caused gradient evaluation steps to be reported a the maximum.
+	* REML optimization for sigma with a fixef prior was slightly off.
+	* sigma now accepts inverse gamma priors (improper, as well).
+	* Internal version of sim().
+
+2011-12-15 17:40  Vincent Dorie <vincent@stat.columbia.edu>
+
+        * Prevented summary from printing misc. lines when only one covariance prior is implemented. Gaussian fixed effects priors summarize in terms of their covariance correctly when the covariance is diagonal or a scalar times the identity.
 
 2011-11-15 17:03  Vincent Dorie <vincent@stat.columbia.edu>
 
         * Fixed a bug related to the scaling of priors to the data in the presence of interactions.
         * Added point priors on the common scale, enabling meta-analyses.
+
+2010-12-19 19:27  Vincent Dorie <vincent@stat.columbia.edu>
+
+	* Initial version.

@@ -14,14 +14,14 @@ blmer(formula, data, family = NULL, REML = TRUE,
       control = list(), start = NULL, verbose = FALSE,
       doFit = TRUE, subset, weights, na.action, offset,
       contrasts = NULL, model = TRUE, x = TRUE,
-      cov.prior = "wishart",
-      fixef.prior = "normal", var.prior = NULL,
+      cov.prior = "wishart", fixef.prior = "normal",
+      var.prior = "inverse.gamma",
       \dots)
 bglmer(formula, data, family = gaussian, start = NULL,
        verbose = FALSE, nAGQ = 1, doFit = TRUE, subset, weights,
        na.action, offset, contrasts = NULL, model = TRUE,
        control = list(), cov.prior = "wishart",
-       fixef.prior = "normal", var.prior = NULL, \dots)
+       fixef.prior = "normal", \dots)
 }
 \arguments{
   \item{cov.prior}{string or list of strings. Imposes a prior over the
@@ -36,7 +36,11 @@ bglmer(formula, data, family = gaussian, start = NULL,
     supported options are \code{"none"} and \code{"normal"}.
     Default is \code{"normal"} with parameters as specified in the
     details section.}
-  \item{var.prior}{string. Not yet implemented.}
+  \item{var.prior}{string. Imposes a prior over the so-called common scale
+    parameter, also known as the conditional variance given the modeled
+    coefficients/random effects. Options are \code{"point"} and
+    \code{"inverse.gamma"}. Default is \code{"inverse.gamma"} with parameters
+    specified below.}
   \item{verbose}{logical scalar.  If \code{TRUE} verbose output is
     generated during the optimization of the parameter estimates. In
     addition, debugging information about priors is printed out before
@@ -250,6 +254,8 @@ bglmer(formula, data, family = gaussian, start = NULL,
   
   The default is for \code{sd} to be \code{c(10, 2.5)}, \code{cov.scale} to be
   \code{'absolute'}, and \code{data.scale} to be \code{'free'}.
+
+  \strong{Common Scale Prior}
 }
 \value{
   An object of class \code{"\linkS4class{bmer}"}, for which many methods
@@ -269,12 +275,23 @@ bglmer(formula, data, family = gaussian, start = NULL,
               cov.prior="wishart"))
 (fm4 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior="inverse.wishart(df = 5, inverse.scale = diag(0.5, 2))"))
-# unmodeled coefficient prior
+
+#  unmodeled coefficient prior
 (fm5 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior = "none", fixef.prior="normal"))
 (fm6 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior = "none",
               fixef.prior="normal(cov = diag(0.5, 2), posterior.scale='absolute')"))
+
+#  common scale prior
+#    eight schools example
+  y <- c(28, 8, -3, 7, -1, 1, 18, 12);
+  sigma <- c(15, 10, 16, 11, 9, 11, 10, 18);
+  y.z <- (y - mean(y)) / sigma;
+  g <- 1:8
+  
+  model1 <- blmer(y.z ~ 1 + (1 | g), var.prior = "point",
+                  cov.prior = NULL, fixef.prior = NULL);
 }
 \keyword{models}
 \keyword{methods}

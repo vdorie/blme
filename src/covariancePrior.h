@@ -9,4 +9,5 @@ double calculateCovarianceDeviance(SEXP prior, double commonScale,
                                    
 void setCovarianceConstraints(SEXP prior, double *boxConstraints, int factorDimension);
 
+
 #endif // BLME_COVARIANCE_PRIOR_H

@@ -18,17 +18,14 @@ blockwiseLeftMultiplyMatrixByDiagonalMatrices(CHM_SP sparseDesignMatrix,
                                               const SparseMatrixStructure *sparseMatrixStructure);
 
 /**
- * Populate the st, numColumnsPerFactor and numFactorsPerFactor arrays.  Return the maximum element of nc.
+ * Populate the stMatrices, numColumnsPerFactor and numRowsPerFactor arrays.
  *
- * @param ST pointer to a list (length nt) of matrices
- * @param Gp group pointers (length nt + 1)
- * @param st length nt array of (double*) pointers to be filled with
- * pointers to the contents of the matrices in ST.  Not used if NULL.
- * @param nc length nt array to be filled with the number of columns
- * @param nlev length nt array to be filled with the number of
- *        factors of the grouping factor for each term
- * 
- * @return maximum element of nc
+ * @param stExpression pointer to a list (length numFactors) of matrices
+ * @param sparseRowsForFactor pointers into sparse structure for given factor (length numFactors + 1)
+ * @param stMatrices length numFactors array of (double*) pointers to be filled with
+ *        pointers to the contents of the matrices in ST.  Not used if NULL.
+ * @param sparseMatrixStructure struct containing the dimensions of each factor, numGroupsPerFactor, 
+ *        and maxFactorDimension
  */
 void
 getSparseContentAndStructure(const SEXP stExpression, const int *sparseRowForFactor,
@@ -57,11 +54,11 @@ getSparseContentAndStructure(const SEXP stExpression, const int *sparseRowForFac
 /**
  * Return the index of the factor associated with parameter index ind
  *
- * @param ind an index in [0, Gp[nt] - 1]
- * @param nt total number of terms
- * @param Gp group pointers, a vector of length nt+1 with Gp[0] = 0
+ * @param row an index in [0, sparseRowsForFactor[numFactors] - 1]
+ * @param numFactors total number of grouping factors
+ * @param sparseRowsForFactor pointers into sparse structure for given factor (length numFactors + 1)
  *
- * @return idnex of assicated factor
+ * @return index of assicated factor
  */
 int getFactorForSparseRow(int row, int numFactors, const int *sparseRowsForFactor)
 {
@@ -70,7 +67,7 @@ int getFactorForSparseRow(int row, int numFactors, const int *sparseRowsForFacto
     if (row < sparseRowsForFactor[factor + 1]) return factor;
   }
   error("invalid row index %d (max is %d)", row, sparseRowsForFactor[numFactors]);
-  return -1;                  /* -Wall */
+  return -1;
 }
 
 

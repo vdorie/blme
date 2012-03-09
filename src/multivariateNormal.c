@@ -69,8 +69,7 @@ double dmvn3(const double *x, int dim, const double *mean, const double* covInve
     x = centeredX;
   }
   
-  multiplyMatrixByVector(covInverse, dim, dim, TRUE,
-                         x, temp);
+  applyMatrixToVector(covInverse, dim, dim, TRUE, x, temp);
   
   double exponent = 0.0;
   for (int i = 0; i < dim; ++i) exponent += x[i] * temp[i];

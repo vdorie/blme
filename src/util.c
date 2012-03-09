@@ -77,3 +77,15 @@ SEXP SET_DIMS(SEXP obj, int numRows, int numCols)
   
   return(obj);
 }
+
+SEXP getListElement(SEXP list, char const* name)
+{
+  SEXP result = R_NilValue, names = getAttrib(list, R_NamesSymbol);
+    
+  for (unsigned int i = 0; i < length(list); ++i)
+    if (strcmp(CHAR(STRING_ELT(names, i)), name) == 0) {
+      result = VECTOR_ELT(list, i);
+      break;
+    }
+  return result;
+}

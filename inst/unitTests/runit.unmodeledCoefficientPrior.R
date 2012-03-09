@@ -98,8 +98,7 @@ test.blme.parsePrior.fixef.prior <- function()
   # ignore the false convergence
   options(warn = -1);
   model1 <- blmer(y ~ x.1 + (1 | g.1), control = list(maxIter = 0L),
-                  cov.prior = NULL,
-                  fixef.prior = NULL);
+                  cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   
   prior <- blme:::parsePrior(model1, fixef.prior = "normal(data.scale = 'absolute')");

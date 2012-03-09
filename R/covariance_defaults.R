@@ -33,7 +33,7 @@ loadCovarianceDefaults <- function(env) {
 
   env$defaultCorrelationInverseGammaShape <- 0.5;
   env$defaultCorrelationInverseGammaScale <-
-    expression(ifelse(posteriorScale == SD_SCALE_NAME, 10, 10^2) *
+    expression(ifelse(posteriorScale == SD_SCALE_NAME, 10^1, 10^2) *
                (shape + 1));
   env$defaultCorrelationWishartDegreesOfFreedom <- expression(factorDimension + 3);
   env$defaultCorrelationWishartScale <-
@@ -44,7 +44,7 @@ loadCovarianceDefaults <- function(env) {
 
   env$defaultCorrelationInverseWishartDegreesOfFreedom <- expression(factorDimension - 0.5);
   env$defaultCorrelationInverseWishartInverseScale <-
-    expression(diag(10^2 / (degreesOfFreedom + factorDimension + 1), factorDimension));
+    expression(diag(10^-2 / (degreesOfFreedom + factorDimension + 1), factorDimension));
 
 
 

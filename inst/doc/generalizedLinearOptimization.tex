@@ -1,0 +1,498 @@
+\documentclass[10pt]{article}
+
+\usepackage{amsmath}
+\usepackage{verbatim}
+\usepackage{mathrsfs}
+\usepackage{url}
+\usepackage{undertilde}
+\usepackage{bm}
+\usepackage{bbold}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+
+\let\proglang=\textsf
+\newcommand{\pkg}[1]{{\fontseries{b}\selectfont #1}}
+
+\newcommand{\E}{\mathsf{E}}
+\newcommand{\VAR}{\mathsf{VAR}}
+\newcommand{\COV}{\mathsf{COV}}
+\newcommand{\SD}{\mathsf{SD}}
+\newcommand{\Prob}{\mathsf{P}}
+
+
+\begin{document}
+
+In a generalized linear model, we typically have two things to
+specify:
+
+\begin{enumerate}
+\item the distributional family from which we believe the data to have
+  come,
+\item and the ``link'' function that expresses the relationship
+  between the linear predictor and the expected value of the response.
+\end{enumerate}
+
+Point 2 above is given by the notion:
+
+\begin{align*}
+\eta_i & = x_i^\top\beta + z_i^\top\theta, \\
+\mu(\eta_i) & = E_{\eta_i}[y_i \mid x_i, z_i], \\
+& = g^{-1}(\eta_i).
+\end{align*}
+
+Point 1 is determined by restricting our focus to the exponential
+family. We can write down a density as:
+
+\begin{equation*}
+p(y_i, \mid \theta, \beta, \tau) = \exp\left\{\frac{y_i \gamma(\theta,
+      \beta) - b(\theta, \beta)}{c(\tau)} - h(\tau, y_i)\right\}.
+\end{equation*}
+
+\noindent $\eta$ is the ``linear predictor'', and $g$ is the link
+function. $\gamma$ is known as the ``natural parameter'', and is
+occasionally a convenient way of parameterizing the distribution.
+
+One good way of describing $\gamma$ is as a function the mean of the
+distribution, $\mu$, so that it remains independent of our choice of
+link function. Thus we have $\gamma(\mu)$ as a function, or more
+specifically $\gamma(\mu(\eta(\theta, \beta)))$.
+
+$b$ is part of the normalizing constant of the distribution, and thus
+it might make sense to write it down as a function of the natural
+parameter, $\gamma$. For any particular distribution, this can be
+written down explictly. However, we can go one step further by taking the derivative with respect to $\gamma$
+of the integral of the density:
+
+\begin{align*}
+1 & = \int \exp\left\{\frac{y \gamma - b(\gamma)}{c(\tau)} - h(\tau, y)\right\}
+  \,\mathrm{d}y, \\
+0 & = \frac{1}{c(\tau)} \int \left(y - \frac{\partial
+      b}{\partial\gamma} \right)
+   \exp\left\{\frac{y \gamma - b(\gamma)}{c(\tau)} - h(\tau, y)\right\}
+  \,\mathrm{d}y, \\
+\mu & = \frac{\partial b}{\partial\gamma}.
+\end{align*}
+
+\noindent This relationship comes into play when we take the log and
+take a derivative, such that we are never that interested in $b$
+itself.
+
+One further relationship is required before we can optimize. Consider taking the
+derivative with respect to $\mu$ of the mean.
+
+\begin{align*}
+\mu & = \int y \exp\left\{\frac{y \gamma - b(\gamma)}{c(\tau)} - h(\tau, y)\right\}
+  \,\mathrm{d}y, \\
+1 & = \frac{1}{c(\tau)} \int \left( y^2
+  \frac{\partial\gamma}{\partial\mu} - y
+  \frac{\partial b}{\partial\gamma}
+  \frac{\partial\gamma}{\partial\mu} \right)
+   \exp\left\{\frac{y \gamma - b(\gamma)}{c(\tau)} - h(\tau, y)\right\}
+  \,\mathrm{d}y, \\
+& = \frac{1}{c(\tau)} \left(\E[y^2] - \mu^2\right)\frac{\partial\gamma}{\partial\mu},\\
+\frac{\partial\gamma}{\partial\mu} & = \frac{c(\tau)}{\VAR[y]}.
+\end{align*}
+
+To complete the model, assume:
+
+\begin{equation*}
+\theta \mid \Sigma, \tau \sim N(0, c(\tau)\Sigma).
+\end{equation*}
+
+Our goal is to maximize:
+\begin{align*}
+L(\Sigma, \beta, \tau; \bm{y}) & = p(\bm{y} \mid \Sigma,
+\beta, \tau), \\
+& = \int p(\bm{y} \mid \theta, \beta, \tau) p(\theta \mid \Sigma,
+\tau) \, \mathrm{d}\theta.
+\end{align*}
+
+As this integral is often intractable, we consider the Laplace
+approximation which will hold as the number of observations per group gets large. The
+Laplace approximation requires finding the mode of the joint with
+respect to $\theta$. Hereafter, we will vectorize what components we
+can, with $\gamma$ and $\mu$ being the component-wise application of
+the respective functions.
+
+Ignoring data-alone and constant terms, the overall density is proportional to :
+
+\begin{equation*}
+  \left|\Sigma\right|^{-1/2} \exp\left\{\dfrac{1}{c(\tau)}\left[
+    \bm{y}^\top\gamma - \sum_{i=1}^Nb(\gamma_i) \right] -
+  \sum_{i=1}^Nh(\tau, y_i) - \dfrac{1}{2c(\tau)}\theta^\top\Sigma^{-1}\theta
+  \right\}.
+\end{equation*}
+
+Considering only the parts that live under the integral -
+i.e. involving \(\theta\) (generally through $\gamma$) we have:
+
+\begin{align*}
+l(\theta, \beta, \tau) & \propto \log \left[ p(\bm{y} \mid \theta, \beta, \tau)
+p(\theta \mid \Sigma, \tau) \right], \\ 
+& = \dfrac{1}{c(\tau)}\left[\bm{y}^\top\gamma - \sum_{i=1}^N b(\gamma_i) \right] -
+ \dfrac{1}{2c(\tau)}\theta^\top\Sigma^{-1}\theta.
+\end{align*}
+
+Assuming that \(c(\tau)\) is not \(0\) or \(\infty\), the maximum in
+\(l\) will not depend upon the scale so that it is sufficient to
+consider the function:
+\begin{align*}
+l(\theta, \beta) & = \bm{y}^\top\gamma - \sum_{i=1}^Nb(\gamma_i) -
+  \frac{1}{2}\theta^\top\Sigma^{-1}\theta, \\
+l(\theta, \beta) & = \bm{y}^\top\gamma(\mu(\eta(\theta, \beta))) -
+\sum_{i=1}^Nb(\gamma_i(\mu_i(\eta_i(\theta, \beta)))) -
+  \frac{1}{2}\theta^\top\Sigma^{-1}\theta, \\
+\end{align*}
+
+This is also a function of \(\Sigma\), but at this point we
+can consider it fixed and omit it from our notation. During
+optimization, $\beta$ is fixed as well, but for simulation purposes we
+will want to be able to derive their joint maximum.
+
+The following will require taking a variety of vector-valued and
+matrix derivatives. We follow the convention that:
+
+\begin{align*}
+\mathrm{D}f(\bm{X}) & =\frac{\mathrm{d}f(\bm{X})}{\mathrm{d}\bm{X}}, \\
+& = \frac{\mathrm{d}f(\bm{X}):}{\mathrm{d}\bm{X}^\top :},
+\end{align*}
+
+where ``$:$'' is the ``vectorization'' operator that stacks the
+columns of its argument. The transpose in the denominator is to signal
+that the derivative goes across with regards to the elements of
+$\bm{X}:$. If $F: \mathbb{R}^{n\times m} \rightarrow
+\mathbb{R}^{p\times q}$, then $\mathrm{D}F$ is
+$pq\times nm$.
+
+For the most part, derivatives will be obtained by using the product
+rule as given by $\mathrm{D}FG = [G^\top
+\otimes I]\mathrm{D}F+ [I \otimes F]\mathrm{D}G$. We will cheat and
+write simpler matrices whenever it makes the calculations more easy to
+read, but will be sure to point out when we do so.
+
+In order of hierarchy, the parameters in our model are $\gamma$,
+$\mu$, $\eta$, and finally $\theta$ and $\beta$. $\gamma$ and $\mu$ are
+both maps from $\mathbb{R}^N$ to $\mathbb{R}^N$ so that
+$\frac{\partial\gamma}{\partial\mu}$ and
+$\frac{\partial\mu}{\partial\eta}$ are $N\times N$ matrices that have
+elements strictly on the diagaonal.
+
+$\eta$ maps the number coefficients to an $N$ dimensional object, so its
+derivative is a $N \times Q$, $N \times P$, or $N \times (Q + P)$ matrix,
+depending on the context ($Q$ is the number of modeled coefficients,
+$P$ is the number of unmodeled ones). Specifically, we have 
+$\frac{\partial\eta}{\partial\theta} = \bm{Z}$,
+$\frac{\partial\eta}{\partial\beta} = \bm{X}$, and the derivative with
+respect to both components is just the matrices concatenated.
+
+Returning to the log-joint:
+
+\begin{align*}
+\dfrac{\partial}{\partial \theta}l(\theta, \beta)  & =
+\bm{y}^\top\frac{\partial\gamma}{\partial\mu}
+\frac{\partial\mu}{\partial\eta}
+\frac{\partial\eta}{\partial\theta}
+- \left.\frac{\partial b}{\partial\gamma}\right|_{b(\gamma)}
+\frac{\partial\gamma}{\partial\mu}
+\frac{\partial\mu}{\partial\eta}
+\frac{\partial\eta}{\partial\theta}
+- \theta^\top\Sigma^{-1}, \\
+& = (\bm{y} - \mu)^\top \frac{\partial\gamma}{\partial\mu}
+\frac{\partial\mu}{\partial\eta} \bm{Z} - \theta^\top\Sigma^{-1}, \\
+\dfrac{\partial}{\partial\beta}l(\theta, \beta) & = 
+(\bm{y} - \mu)^\top \frac{\partial\gamma}{\partial\mu}
+\frac{\partial\mu}{\partial\eta} \bm{X}.
+\end{align*}
+
+We will signify by $\nabla l$ the column vector that results from
+differentiation, i.e. the transpose of the above. (Once again, we will
+only need the derivative with respect to $\theta$ for optimization,
+but that with respect to $\beta$ as well for simulation). We can simplify the above by writing
+
+\begin{align*}
+\nabla l(\beta, \theta) & =
+\begin{bmatrix}
+\bm{Z}^\top \\ \bm{X}^\top
+\end{bmatrix}
+\frac{\partial\gamma}{\partial\mu}
+\frac{\partial\mu}{\partial\eta}
+\left(\bm{y} -
+  \mu\right) -
+\begin{bmatrix}
+\Sigma^{-1}\theta \\
+\utilde{0}_P
+\end{bmatrix}, \\
+& = \begin{bmatrix}
+\bm{Z}^\top \\ \bm{X}^\top
+\end{bmatrix}
+\frac{c(\tau)}{\VAR[\bm{y}]}
+\frac{\mathrm{d} g^{-1}}{\mathrm{d}x}
+\left(\bm{y} -
+  \mu\right) -
+\begin{bmatrix}
+\Sigma^{-1}\theta \\
+\utilde{0}_P
+\end{bmatrix}.
+\end{align*}
+
+\noindent The last line is included as a reminder as to what the
+derivatives mean in a practical sense, as well as what functions need
+to be written down for computation.
+
+To obtain a root to the above, we use Newton's method. Suppressed in
+the above notation is that the partials above remain functions of the coefficients, so that we will be required to take their derivatives as
+well. For notational simplicity, let $B = \begin{bmatrix}
+  \bm{Z} & \bm{X} \end{bmatrix}$, $\Gamma' =
+\frac{\partial\gamma}{\partial\mu}$, and $U' = \frac{\partial\mu}{\partial\eta}$. The data part requires the most work to differentiate, but
+using the product rule on it we obtain:
+
+\begin{align*}
+\mathrm{D}\left[ B^\top \Gamma'U'(\bm{y} - \mu) \right] & =
+\left[(\bm{y} - \mu)^\top \otimes I
+\right] \mathrm{D}(B^\top\Gamma'U') -
+\left[I_1 \otimes B^\top\Gamma'U'\right]
+\frac{\partial\mu}{\partial\eta}\frac{\partial\eta}{\partial (\theta,
+  \beta)}, \\
+& = \left[(\bm{y} - \mu)^\top \otimes I
+\right] \left[I \otimes B^\top\right] \mathrm{D}(\Gamma'U') - B^\top
+\Gamma'U' U' B, \\
+& = \left[(\bm{y} - \mu)^\top \otimes B^\top
+\right] \mathrm{D}(\Gamma'U') - B^\top
+U' \Gamma'U' B.
+\end{align*}
+
+\noindent In the first term, the remaining derivative is with respect
+to a diagonal matrix with each term depending only on a single,
+corresponding input. It is possible to take this derivative and
+work out the product to see that it still functions as a diagonal matrix despite
+the Kronecker, but we can provide some intutition for this result
+as well. For vectors $v$ and $u$,
+$\mathrm{diag}(v) u = \mathrm{diag}(u) v$, with the main goal being to
+create a weighted vector. Thus, we can write $\Gamma'U'(\bm{y}
+- \mu)$ as $\mathrm{diag}(\bm{y} - \mu)(\utilde{\gamma}' \times \utilde{\mu})$,
+$\utilde{\gamma}\times\utilde{\mu}'$ being a vector of the
+element-wise product of first derivatives.
+
+The derivative of this with respect to $\mu$ will turn $\utilde{\gamma}'\times\utilde{\mu}$ into an $N\times N$ matrix with
+elements only on the diagonal, such that we have
+$\mathrm{diag}(\bm{y} -
+\mu)\times\mathrm{diag}(\utilde{\gamma}''\times\utilde{\mu}'^2 +
+\utilde{\gamma}'\times\utilde{\mu}')$. Interchanging
+the order of the product of diagonal matrices, we chose to denote this
+as: $\bm{R}(U'\Gamma''U' + \Gamma'U'')$, $\bm{R}$ standing
+for the matrix with residuals along the diagonal. Summing up:
+
+\begin{equation*}
+\mathrm{D}\left[ B^\top \Gamma'U'(\bm{Y} - \mu) \right] =
+B^\top\left[\bm{R}(U'\Gamma''U' +\Gamma'U'') - U'\Gamma'U'\right] B.
+\end{equation*}
+
+Consequently,
+
+\begin{equation*}
+\nabla^2 l(\beta, \theta) =
+\begin{bmatrix} \bm{Z}^\top \\ \bm{X}^\top \end{bmatrix}
+\left[\bm{R}\left(\frac{\partial\mu}{\partial\eta}
+    \frac{\partial^2\gamma}{\partial\mu^2}
+    \frac{\partial\mu}{\partial\eta} + 
+    \frac{\partial\gamma}{\partial\mu}
+    \frac{\partial^2\mu}{\partial\eta^2} \right) -
+  \frac{\partial\mu}{\partial\eta}
+  \frac{\partial\gamma}{\partial\mu}
+  \frac{\partial\mu}{\partial\eta}\right]
+\begin{bmatrix} \bm{Z} & \bm{X} \end{bmatrix} -
+\begin{bmatrix} \Sigma^{-1} & \bm{0}_{Q\times P} \\
+\bm{0}_{P\times Q} & \bm{0}_{P\times P}
+\end{bmatrix}.
+\end{equation*}
+
+We may also consider replacing this quantity by its expectation under
+\(\bm{Y} \mid \bm{X}, \bm{Z}\), in which case $\bm{R}$ vanishes. This prouduces:
+
+\begin{align*}
+I(\beta, \theta) & =
+\begin{bmatrix} \bm{Z}^\top \\ \bm{X}^\top \end{bmatrix}
+\frac{\partial\mu}{\partial\eta}
+\frac{\partial\gamma}{\partial\mu}
+\frac{\partial\mu}{\partial\eta}
+\begin{bmatrix} \bm{Z} & \bm{X} \end{bmatrix} +
+\begin{bmatrix} \Sigma^{-1} & \bm{0}_{Q\times P} \\
+\bm{0}_{P\times Q} & \bm{0}_{P\times P}
+\end{bmatrix}, \\
+& = 
+\begin{bmatrix} \bm{Z}^\top \\ \bm{X}^\top \end{bmatrix}
+\frac{\mathrm{d}g^{-1}}{\mathrm{d}x}
+\frac{c(\tau)}{\VAR[\bm{y}]}
+\frac{\mathrm{d}g^{-1}}{\mathrm{d}x}
+\begin{bmatrix} \bm{Z} & \bm{X} \end{bmatrix} +
+\begin{bmatrix} \Sigma^{-1} & \bm{0}_{Q\times P} \\
+\bm{0}_{P\times Q} & \bm{0}_{P\times P}
+\end{bmatrix}.
+\end{align*}
+
+We can turn this into a penalized, weighted least squares problem by
+using a weight matrix that is the inverse of the variance and rolling
+$\mathrm{d}g^{-1}/\mathrm{d}x$ into the data. For $\theta$ alone, as is done in the
+optimization, let $\bm{A} = \frac{\partial\mu}{\partial\eta}\bm{Z}$, $\bm{W} =
+\frac{\partial\gamma}{\partial\mu}$. The the updates in a
+Newton-Raphson optimization with Fisher scoring are:
+
+\begin{equation*}
+\left[\bm{A}^\top \bm{W} \bm{A} + \Sigma^{-1}\right]\delta_\theta = \bm{A}^\top \bm{W}(\bm{y} -
+\mu) - \Sigma^{-1}\theta.
+\end{equation*}
+
+Changing gears slightly, if we use a ``canonical'' link function, then
+$\gamma(\mu(\eta)) = g(\mu(\eta)) = \eta$, so that
+$\frac{\partial\gamma}{\partial\mu} \frac{\partial\mu}{\partial\eta} =
+1$. This produces:
+
+\begin{align*}
+\nabla l(\beta, \theta) & =
+\begin{bmatrix}
+  \bm{Z}^\top \\ \bm{X}^\top
+\end{bmatrix}
+(\bm{y} - \mu) -
+\begin{bmatrix}
+  \Sigma^{-1}\theta \\ \utilde{0}_P
+\end{bmatrix}, \\
+I(\beta, \theta) & =
+\begin{bmatrix}
+  \bm{Z}^\top \\ \bm{X}^\top
+\end{bmatrix}
+\frac{\partial\mu}{\partial\eta}
+\begin{bmatrix}
+  \bm{Z} & \bm{X}
+\end{bmatrix} + 
+\begin{bmatrix} \Sigma^{-1} & \bm{0}_{Q\times P} \\
+\bm{0}_{P\times Q} & \bm{0}_{P\times P}
+\end{bmatrix}.
+\end{align*}
+
+
+
+\begin{comment}
+From this, we find \(\tilde{\theta}\) and \(\tilde{\beta}\), the modes
+of the integrand. Returning to our integral, we change scales
+slightly and let
+\begin{align*}
+f(\beta, \theta) & = -\frac{1}{2}d(\beta, \theta), \\
+& = \bm{Y}^\top\gamma(\eta) - \utilde{1}^\top_N b(\eta) -
+  \theta^\top\Sigma^{-1}\theta
+\end{align*}
+be the part in the exponent under the integral, up to a few constants
+and \(c(\tau)\). We approximate \(f(\beta, \theta)\) around its
+maximum:
+\begin{align*}
+f(\beta, \theta) & = f\left(\tilde\beta, \tilde\theta\right) +
+  \dfrac{1}{2}\begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix}^\top
+  \nabla ^2 f\left(\tilde\beta, \tilde\theta\right)
+  \begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix} +
+  O\left( \begin{Vmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{Vmatrix}^3 \right)o_p\left(n^3\right).
+\end{align*}
+The \(o_p\left(n^3\right)\) comes from the fact that \(f\) behaves like
+an estimating equation.
+\begin{align*}
+\int \exp\left\{\frac{1}{c(\tau)}f(\beta,\theta)\right\} \,
+\mathrm{d}\theta & = \int
+\exp\left\{\frac{1}{c(\tau)}\left[
+f\left(\tilde\beta, \tilde\theta\right) +
+  \dfrac{1}{2}\begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix}^\top
+  \nabla ^2 f\left(\tilde\beta, \tilde\theta\right)
+  \begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix} +
+  o_p\left(n^3\right)\right]\right\} \, \mathrm{d}\theta, \\
+& \approx \exp\left\{\frac{1}{c(\tau)} f(\tilde\beta,\tilde\theta)
+\right\}
+  \int \exp \left\{-\dfrac{1}{2c(\tau)}\begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix}^\top
+   I\left(\tilde\beta, \tilde\theta\right)
+  \begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix} \right\} \, \mathrm{d}\theta.
+\end{align*}
+We now relabel the elements of the covariance matrix
+\begin{equation*}
+I(\beta,\theta) = \begin{bmatrix} I_{\theta\theta} & I_{\theta\beta} \\
+  I_{\beta\theta} & I_{\beta\beta} \end{bmatrix}.
+\end{equation*}
+\begin{align*}
+\begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix}^\top
+   I\left(\tilde\beta, \tilde\theta\right)
+  \begin{bmatrix} \theta - \tilde\theta \\ \beta -
+    \tilde\beta \end{bmatrix} & =
+(\theta - \tilde\theta)^\top I_{\tilde\theta\tilde\theta} (\theta -
+\tilde\theta)
++ 2\theta^\top I_{\tilde\theta\tilde\beta}(\beta - \tilde\beta)
+-  2\tilde\theta^\top I_{\tilde\theta\tilde\beta}(\beta - \tilde\beta)
++ (\beta - \tilde\beta)^\top I_{\tilde\beta\tilde\beta}(\beta - \tilde\beta), \\
+& = 
+\left(\theta - I_{\tilde\theta\tilde\theta}^{-1}\left(
+I_{\tilde\theta\tilde\theta}\tilde\theta + I_{\tilde\theta\tilde\beta}(\tilde\beta
+  - \beta)\right)\right)^\top
+I_{\tilde\theta\tilde\theta}\left(\theta - I_{\tilde\theta\tilde\theta}^{-1}\left(
+I_{\tilde\theta\tilde\theta}\tilde\theta + I_{\tilde\theta\tilde\beta}(\tilde\beta
+  - \beta)\right)\right) +\tilde\theta^\top I_{\tilde\theta\tilde\theta}\tilde\theta\\
+& + (\beta - \tilde\beta)^\top I_{\tilde\beta\tilde\beta}(\beta - \tilde\beta)
+- \left(I_{\tilde\theta\tilde\theta}\tilde\theta +
+    I_{\tilde\theta\tilde\beta}(\tilde\beta - \beta)\right)^\top
+I_{\tilde\theta\tilde\theta}^{-1}\left(I_{\tilde\theta\tilde\theta}\tilde\theta +
+    I_{\tilde\theta\tilde\beta}(\tilde\beta - \beta)\right)
+-2\tilde\theta^\top I_{\tilde\theta\tilde\beta}(\beta - \tilde\beta), \\
+& = \left\|I_{\tilde\theta\tilde\theta}^{1/2}\left(\theta - I_{\tilde\theta\tilde\theta}^{-1}\left(
+I_{\tilde\theta\tilde\theta}\tilde\theta + I_{\tilde\theta\tilde\beta}(\tilde\beta
+  - \beta)\right)\right)\right\|^2 + (\beta -
+\tilde\beta)^\top (I_{\tilde\beta\tilde\beta} -
+I_{\tilde\beta\tilde\theta}I_{\tilde\theta\tilde\theta}^{-1}I_{\tilde\theta\tilde\beta})
+  (\beta - \tilde\beta), \\
+& = \left\|I_{\tilde\theta\tilde\theta}^{1/2}\left(\theta - I_{\tilde\theta\tilde\theta}^{-1}\left(
+I_{\tilde\theta\tilde\theta}\tilde\theta + I_{\tilde\theta\tilde\beta}(\tilde\beta
+  - \beta)\right)\right)\right\|^2 + (\beta -
+\tilde\beta)^\top {I^{\tilde\beta\tilde\beta}}^{-1}
+  (\beta - \tilde\beta).
+\end{align*}
+Here we use the common notation \(I^{\beta\beta} =
+\left(I_{\beta\beta} -
+  I_{\beta\theta}I_{\theta\theta}^{-1}I_{\theta\beta}\right)^{-1}\),
+as this is the submatrix corresponding to \(\beta\) in the inverse of
+the information matrix.
+\begin{align*}
+\int \exp\left\{\frac{1}{c(\tau)}f(\beta,\theta)\right\} \,
+\mathrm{d}\theta & \approx
+\left(2\pi c(\tau)\right)^{M/2}
+\left|I_{\tilde\theta\tilde\theta}\right|^{-1/2}
+\exp\left\{\dfrac{1}{c(\tau)}\left[f\left(\tilde\beta,\tilde\theta\right) -
+\dfrac{1}{2} \left\|{I^{\tilde\beta\tilde\beta}}^{-1/2}(\beta - \tilde\beta)\right\|^2\right]\right\}
+\end{align*}
+Utilizing the above result we can approximate the likelihood.
+\begin{align*}
+p(\bm{Y} \mid \beta, \Sigma, \tau) & \approx \left|\Sigma\right|^{-1/2}
+\left|I_{\tilde\theta\tilde\theta}\right|^{-1/2}
+\exp\left\{\dfrac{1}{c(\tau)}\left[f\left(\tilde\beta,
+      \tilde\theta\right) - \dfrac{1}{2} 
+\left\|{I^{\tilde\beta\tilde\beta}}^{-1/2}(\beta -
+  \tilde\beta)\right\|^2\right] -
+\sum_{i=1}^Nh(\tau, y_i)\right\} \\
+& = \left|\Sigma\right|^{-1/2}
+\left|I_{\tilde\theta\tilde\theta}\right|^{-1/2}
+p(\bm{Y} \mid \tilde\theta, \tilde\beta, \tau) \exp\left\{
+-\dfrac{1}{2c(\tau)} \left[ \left\|{I^{\tilde\beta\tilde\beta}}^{-1/2}(\beta -
+  \tilde\beta)\right\|^2 +
+\tilde\theta^\top\Sigma^{-1}\tilde\theta\right]
+\right\}.
+\end{align*}
+At this point, it is worth observing that \(I_{\theta\theta}\) and \(I^{\beta\beta}\) are
+non-trivial functions of \(\Sigma\).
+
+To optimize, the approximate maximum likelihood estimate of \(\beta\)
+is given by \(\tilde\beta\). The maximum in \(\tau\) will depend on
+\(c\) and \(h\), although for many models there is no dispersion
+parameter. Finally, for \(\Sigma\), the approximate likelihood is maximized
+by any brute force technique.
+
+\end{comment}
+
+\end{document}

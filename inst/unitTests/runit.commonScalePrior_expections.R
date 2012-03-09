@@ -98,7 +98,7 @@ test.blme.parsePrior.cov.prior.exceptions <- function()
   options(warn = -1);
   lmerFit  <-  lmer(y ~ x.1 + (1 | g.1), control = list(maxIter = 0L));
   blmerFit <- blmer(y ~ x.1 + (1 | g.1), control = list(maxIter = 0L),
-                    cov.prior = NULL, fixef.prior = NULL);
+                    cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   
   RUnitOptions <- getOption("RUnit");
@@ -122,4 +122,11 @@ test.blme.parsePrior.cov.prior.exceptions <- function()
   checkException(blme:::parsePrior(blmerFit, var.prior = "point(value = 'not a number')"));
   checkException(blme:::parsePrior(blmerFit, var.prior = "point(value = 0)"));
   checkException(blme:::parsePrior(blmerFit, var.prior = "point(value = 2, posterior.scale = 'not a scale')"));
+
+  checkException(blme:::parsePrior(blmerFit, var.prior = "gamma"));
+  checkException(blme:::parsePrior(blmerFit, var.prior = "inverse.gamma(-1)"));
+  checkException(blme:::parsePrior(blmerFit, var.prior = "inverse.gamma(scale = -1)"));
+  checkWarning(blme:::parsePrior(blmerFit, var.prior = "inverse.gamma(notAParam = 0)"));
+  checkException(blme:::parsePrior(blmerFit, var.prior = "inverse.gamma(posterior.scale = 'not a scale')"));
+  checkException(blme:::parsePrior(blmerFit, var.prior = "inverse.gamma(scale = 2, posterior.scale = 'sd')"));
 }

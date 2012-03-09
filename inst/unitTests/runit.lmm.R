@@ -46,13 +46,13 @@ test.blme.blmer <- function()
 
   lmerFit  <-  lmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2));
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
-                    cov.prior = NULL,
-                    fixef.prior = NULL);
+                    cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
 
   # as.numeric to strip names from blmer ST
   checkEquals(as.numeric(unlist(lmerFit@ST)), as.numeric(unlist(blmerFit@ST)));
-  checkEquals(lmerFit@ranef, blmerFit@ranef);
-  checkEquals(lmerFit@fixef, blmerFit@fixef);
+  # off-by-one bug fix in blmer means that the two are no longer exactly equal
+  checkEquals(lmerFit@ranef, blmerFit@ranef, tolerance=1.5e-4);
+  checkEquals(lmerFit@fixef, blmerFit@fixef, tolerance=1e-6);
 }
 
 #lmerFit <- lmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), verbose=TRUE, control=list(maxIter=1L));

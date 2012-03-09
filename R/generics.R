@@ -95,12 +95,18 @@ printBmer <- function(x, digits = max(3, getOption("digits") - 3),
   covariancePriorOutput <- covariancePriorToString(x);
   if (length(covariancePriorOutput) > 0) {
     cat("Cov prior  : ", covariancePriorOutput[1], "\n", sep="");
-    for (i in 2:length(covariancePriorOutput))
-      cat("           : ", covariancePriorOutput[i], "\n", sep="");
+    if (length(covariancePriorOutput) > 1) {
+      for (i in 2:length(covariancePriorOutput))
+        cat("           : ", covariancePriorOutput[i], "\n", sep="");
+    }
   }
   unmodeledCoefficientPriorOutput <- unmodeledCoefficientPriorToString(x);
   if (length(unmodeledCoefficientPriorOutput) > 0)
     cat("Fixef prior: ", unmodeledCoefficientPriorOutput, "\n", sep="");
+  
+  commonScalePriorOutput <- commonScalePriorToString(x);
+  if (length(commonScalePriorOutput) > 0)
+    cat("Var prior : ", commonScalePriorOutput, "\n", sep="");
   
   print(so@AICtab, digits = digits)
   
@@ -181,3 +187,19 @@ formatVC <- function(varc, digits = max(3, getOption("digits") - 2))
     cbind(reMat, rBind(corr, rep.int("", ncol(corr))))
   } else reMat
 }
+
+printBmerPrior <- function(x, digits = max(3, getOption("digits") - 3))
+{
+  hyperparameters <- x@hyperparameters;
+  if (x@type == getEnumOrder(typeEnumeration, DIRECT_TYPE_NAME)) {
+    if (x@families[1] == getEnumOrder(familyEnumeration, NORMAL_FAMILY_NAME)) {
+      hyperparameters <- hyperparameters[-1];
+    }
+  }
+  hyperparameters <- round(hyperparameters, digits);
+  familyString <- buildStringForFamily(x@families, x@scales, hyperparameters, FALSE);
+  cat(familyString$string, "\n", sep="");
+}
+
+setMethod("print", "bmerPrior", printBmerPrior);
+setMethod("show", "bmerPrior", function(object) printBmerPrior(object))

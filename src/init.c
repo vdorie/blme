@@ -3,11 +3,13 @@
 
 #include "lmer.h"
 #include "Syms.h" 
+#include "sim.h"
 #include "blmer.h"
 #include "string.h"
 
 #include "test.h"
 #include "lmm.h"
+#include "unmodeledCoefficientPrior.h"
 
 #define CALLDEF(name, n)  {#name, (DL_FUNC) &name, n}
 
@@ -21,6 +23,8 @@ static R_CallMethodDef CallEntries[] = {
     CALLDEF(mer_update_ranef, 1),
     CALLDEF(mer_update_mu, 1),
     CALLDEF(mer_validate, 1),
+    
+    CALLDEF(bmer_sim, 2),
     
     CALLDEF(bmer_get_dev, 1),
     CALLDEF(bmer_approximate_dev, 1),

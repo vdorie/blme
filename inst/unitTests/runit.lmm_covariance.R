@@ -348,7 +348,7 @@ test.blme.blmer.covarPrior <- function()
   
   options(warn = -1);
   testModel <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
-                     control=list(maxIter=0L),
+                     control=list(maxIter=0L), var.prior = NULL,
                      cov.prior = NULL, fixef.prior = NULL);
   options(warn = 0);
 
@@ -363,14 +363,14 @@ test.blme.blmer.covarPrior <- function()
   }
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
-                    cov.prior = NULL, fixef.prior = NULL);
+                    cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
     
   checkEquals(stMatricesToVector(blmerFit@ST), optimResults$par, tolerance=1e-5);
 
   
   options(warn = -1);
   testModel <- blmer(y ~ x.1 + x.2 + (1 | g.1), control=list(maxIter=0L),
-                     cov.prior="g.1 ~ gamma(rate = 0.5)");
+                     cov.prior="g.1 ~ gamma(rate = 0.5)", fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
 
   if (FALSE) {
@@ -385,7 +385,7 @@ test.blme.blmer.covarPrior <- function()
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 | g.1),
                     cov.prior="g.1 ~ gamma(rate = 0.5)",
-                    fixef.prior = NULL);
+                    fixef.prior = NULL, var.prior = NULL);
 
   checkEquals(stMatricesToVector(blmerFit@ST), optimResults$par, tolerance=1e-5);
   
@@ -394,7 +394,7 @@ test.blme.blmer.covarPrior <- function()
   options(warn = -1);
   testModel <- blmer(y ~ x.1 + x.2 + (1 | g.1), control = list(maxIter=0L),
                      cov.prior = "g.1 ~ inverse.gamma(scale = 2.0)",
-                     fixef.prior = NULL);
+                     fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   
   if (FALSE) {
@@ -409,7 +409,7 @@ test.blme.blmer.covarPrior <- function()
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 | g.1),
                     cov.prior = "g.1 ~ inverse.gamma(scale = 2.0)",
-                    fixef.prior = NULL);
+                    fixef.prior = NULL, var.prior = NULL);
 
   checkEquals(stMatricesToVector(blmerFit@ST), optimResults$par, tolerance=1e-5);
   
@@ -420,7 +420,7 @@ test.blme.blmer.covarPrior <- function()
   options(warn = -1);
   testModel <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), control = list(maxIter=0L),
                      cov.prior = "g.1 ~ wishart(scale = 2)",
-                     fixef.prior = NULL);
+                     fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   
   if (FALSE) {
@@ -435,7 +435,7 @@ test.blme.blmer.covarPrior <- function()
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1),
                     cov.prior="g.1 ~ wishart(scale = 2)",
-                    fixef.prior = NULL);
+                    fixef.prior = NULL, var.prior = NULL);
 
   checkEquals(stMatricesToVector(blmerFit@ST), optimResults$par, tolerance=1e-6);
   
@@ -443,7 +443,7 @@ test.blme.blmer.covarPrior <- function()
   options(warn = -1);
   testModel <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), control=list(maxIter=0L),
                      cov.prior="g.1 ~ inverse.wishart(inverse.scale = 2)",
-                     fixef.prior = NULL);
+                     fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   
   if (FALSE) {
@@ -458,7 +458,7 @@ test.blme.blmer.covarPrior <- function()
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1),
                     cov.prior = "g.1 ~ inverse.wishart(inverse.scale = 2)",
-                    fixef.prior = NULL);
+                    fixef.prior = NULL, var.prior = NULL);
 
   checkEquals(stMatricesToVector(blmerFit@ST), optimResults$par, tolerance=1e-5);
 }

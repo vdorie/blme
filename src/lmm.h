@@ -35,8 +35,11 @@ calculatePenalizedWeightedResidualSumOfSquaresFromProjections(SEXP regression, M
 void
 rotateProjections(SEXP regression, MERCache *cache);
 
-void profileCommonScale(SEXP regression);
-void updateDeviance(SEXP regression);
+// X'X - Rzx'Rzx'. externally available for sim()
+void computeDowndatedDenseCrossproduct(SEXP regression, MERCache* cache, double* target);
+
+void profileCommonScale(SEXP regression, MERCache* cache);
+void updateDeviance(SEXP regression, MERCache* cache);
 
 // returns the new common scale
 double performOneStepOfNewtonsMethodForCommonScale(SEXP regression, MERCache *cache);
@@ -46,9 +49,5 @@ void calculateProjectionsForSingleArgumentAnova(SEXP regression,
                                                 double *modeledCoefProjection,
                                                 double *unmodeledCoefProjection);
 
-                                                
-// for testing purposes
-// derivative w/r/t common scale
-SEXP bmer_getDerivatives(SEXP regression);
                                                 
 #endif // BLME_LMM_H

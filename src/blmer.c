@@ -13,6 +13,7 @@
 #include <Rmath.h>               /* density functions */
 
 #include "lmer.h"
+#include "Syms.h"
 #include "blmer.h"
 #include "util.h"
 #include "wishart.h"
@@ -221,7 +222,6 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
 
 // this should copy in the parameters from whatever form they're in into
 // the ST matrices (and fixef, if necessary). lmer also expects
-// a few related objects to be updated, so we do that too
 void updateRegressionWithParameters(SEXP regression, const double *parameters)
 {
   int *dims = DIMS_SLOT(regression);
@@ -437,10 +437,11 @@ int canProfileCommonScale(SEXP regression)
   SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
   priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
   
-  if (priorType == PRIOR_TYPE_DIRECT &&
-      PRIOR_FAMILY_POINT == PRIOR_FAMILIES_SLOT(commonScalePrior)[0]) {
-    // prior is a point mass, nothing to do
-    return(FALSE);
+  if (priorType == PRIOR_TYPE_DIRECT && 
+      PRIOR_FAMILIES_SLOT(commonScalePrior)[0] != PRIOR_FAMILY_INVGAMMA)
+  {
+    // can only profile if is conjugate
+    return FALSE;
   }
   
   SEXP unmodeledCoefficientPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
@@ -465,8 +466,8 @@ int commonScaleRequiresOptimization(SEXP regression)
   priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
   
   if (priorType == PRIOR_TYPE_DIRECT &&
-      PRIOR_FAMILY_POINT == PRIOR_FAMILIES_SLOT(commonScalePrior)[0]) {
-    // prior is a point mass, nothing to do
+      PRIOR_FAMILIES_SLOT(commonScalePrior)[0] != PRIOR_FAMILY_INVGAMMA) {
+    // can only profile if is conjugate
     return(FALSE);
   }
   

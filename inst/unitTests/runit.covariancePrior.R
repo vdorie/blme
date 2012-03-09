@@ -39,7 +39,7 @@ test.blme.parsePrior.cov.prior <- function()
 
   options(warn = -1);
   model1 <- blmer(y ~ x.1 + (1 | g.1), control = list(maxIter = 0L),
-                  cov.prior = NULL, fixef.prior = NULL);
+                  cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   
   prior <- blme:::parsePrior(model1, cov.prior = "gamma");
@@ -85,7 +85,7 @@ test.blme.parsePrior.cov.prior <- function()
   options(warn = -1);
   model2 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
                   control = list(maxIter = 0L),
-                  cov.prior = NULL, fixef.prior = NULL);
+                  cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   d.1 <- 2;
   d.2 <- 3;
@@ -301,7 +301,7 @@ test.blme.parsePrior.cov.prior <- function()
   options(warn = -1);
   model3 <- blmer(y ~ x.1 + (1 + x.1 | g.1) + (1 | g.2),
                   control = list(maxIter = 0L),
-                  cov.prior = NULL, fixef.prior = NULL);
+                  cov.prior = NULL, fixef.prior = NULL, var.prior = NULL);
   options(warn = 0);
   d.1 <- 2;
   d.2 <- 1;

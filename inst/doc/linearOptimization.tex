@@ -334,6 +334,8 @@ d(\Lambda) = (N - P)\left(1 + \log(2\pi\hat\sigma^2)\right)+2\log|{\bf
 
 \newpage
 
+\section*{Fixef Priors}
+
 For the following, we now impose a Gaussian prior on $\beta$ with a
 known variance $\Sigma_\beta$ (with decomposition ${\bf L}_\beta{\bf
   L}_\beta^\top = \Sigma_\beta$), so that
@@ -582,20 +584,20 @@ matrix ${\bf A}$,
 \end{align*}
 Consequently, using our previous definition of {\bf R},
 \begin{align*}
-\frac{\mathrm{d}}{\mathrm{d}\sigma}|{\bf L}_X(\sigma)| & = 
+\frac{\mathrm{d}}{\mathrm{d}\sigma}|{\bf L}_X(\sigma)| & = \frac{1}{2}
 \frac{\mathrm{d}}{\mathrm{d}\sigma}\left|{\bf
     L}_\beta^{-\top}\left({\bf R}+\sigma^2{\bf I}_P\right){\bf
     L}_\beta^{-1}\right|, \\
-& = \left|\Sigma_\beta^{-1}\right|\frac{\mathrm{d}}{\mathrm{d}\sigma} 
+& = \frac{1}{2} \left|\Sigma_\beta^{-1}\right|\frac{\mathrm{d}}{\mathrm{d}\sigma} 
 \left|{\bf R}+\sigma^2{\bf I}_P\right|, \\
-& = \left|\Sigma_\beta^{-1}\right|\left|{\bf R}+\sigma^2{\bf
+& = \frac{1}{2} \left|\Sigma_\beta^{-1}\right|\left|{\bf R}+\sigma^2{\bf
     I}_P\right| \mathrm{vec}\left(\left({\bf R}+\sigma^2{\bf
     I}_P\right)^{-1}\right)^{\top} \times 2\sigma\mathrm{vec}({\bf
 I}_P), \\
-& = 2\sigma \left|\Sigma_\beta^{-1}\right|\left|{\bf R}+\sigma^2{\bf
+& = \sigma \left|\Sigma_\beta^{-1}\right|\left|{\bf R}+\sigma^2{\bf
     I}_P\right| \mathrm{tr}\left({\bf R}+\sigma^2{\bf
     I}_P\right)^{-1}, \\
-& = 2\sigma\left|{\bf L}_X(\sigma)\right|\mathrm{tr}\left({\bf
+& = \sigma\left|{\bf L}_X(\sigma)\right|\mathrm{tr}\left({\bf
     L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-T}\right).
 \end{align*}
 
@@ -608,7 +610,7 @@ The first derivative of the log-likelihood is then:
   -\left\|\utilde\beta(\sigma)\right\|^2\right) -
 \frac{1}{\sigma}\left\|{\bf L}_\beta^{-1}{\bf
   L}_X^{-\top}(\sigma)\utilde{\beta}(\sigma) \right\|^2 - \\
-2\sigma\times\mathrm{tr}\left({\bf
+\sigma\times\mathrm{tr}\left({\bf
     L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-T}\right).
 \end{multline*}
 
@@ -626,7 +628,7 @@ to compute:
     L}_\beta^{-T} \right)^2  \right).
 \end{align*}
 
-Putting this together, we have
+Putting this together, we have:
 \begin{multline*}
 \frac{\partial^2}{(\partial\sigma)^2} l({\bf Y} \mid \Lambda,
 \sigma ) = (N - P) \frac{1}{\sigma^2} - \frac{3}{\sigma^4} \left({\bf Y}^\top{\bf
@@ -636,9 +638,9 @@ Putting this together, we have
     L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2 + \\
 4\left\| {\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-\top} {\bf L}_\beta^{-1}{\bf
     L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2 -
-2\times\mathrm{tr}\left({\bf
+\times\mathrm{tr}\left({\bf
     L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf
-    L}_\beta^{-T}\right) + 4\sigma^2\times\mathrm{tr}\left( \left( {\bf
+    L}_\beta^{-T}\right) + 2\sigma^2\times\mathrm{tr}\left( \left( {\bf
     L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-T}\right)^2 \right).
 \end{multline*}
 
@@ -653,4 +655,92 @@ the elements. For many models, ${\bf L}_\beta^{-1}$ is diagonal, so
 that ${\bf L}_\beta^{-1}{\bf L}_X^{-\top}$ is triangular and the
 crossproduct can be computed efficiently.
 
+\newpage
+
+\section*{Sigma Priors}
+
+Now we wish to expand the above to priors on $\sigma$. So long as we
+are willing to optimize numerically, any kind of prior is acceptable,
+however for now we restrict our analysis to conjugate families. \\
+
+As an aside, optimization above in sigma is not concave, but tends to have a region of concavity
+containing the mode followed by a convex tail. This is mostly
+conjecture, but it is born out by experience. Using a non-conjugate
+prior would likely accentuate the issue and make optimization much
+more difficult. \\
+
+Conjugacy implies an inverse gamma prior on $\sigma^2$. Supposing then
+that $\sigma^2 \sim \mathrm{Inv}-\Gamma(\alpha, \tau),
+p(\sigma^2)\propto (\sigma^2)^{-(\alpha +
+  1)}\exp\{-\frac{1}{\sigma^2}\tau\}$, we have in the default model:
+
+\begin{equation*}
+p(\sigma^2 \mid {\bf Y}, \Lambda, \beta) \propto
+(\sigma^2)^{-(N/2 + \alpha + 1)}\left|{\bf L}_Z\right|^{-1}
+\exp\left\{-\frac{1}{\sigma^2}\left[
+\frac{1}{2}(\beta - \tilde\beta)^\top{\bf L}_X{\bf L}_X^\top(\beta -
+\tilde\beta) + \frac{1}{2}
+\left\|\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix} -
+\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix} \right\|^2 +
+\tau
+\right]\right\}.
+\end{equation*}
+
+At this point, one can profile out $\beta$ as usual, and consider the posterior
+through its mode as a function of $\Lambda$ by setting $\hat{\sigma}^2
+= \frac{1}{N+ 2\alpha + 2}\left[\|{\bf Y} - {\bf Z}\Lambda\tilde\theta
+  - {\bf X}\tilde\beta\|^2 + \|\tilde\theta\|^2 + 2\tau\right]$.
+
+The corresponding ``deviance'' is:
+
+\begin{equation*}
+d(\Lambda) = (N + 2\alpha + 2)\left(1 + \log(2 \pi\hat\sigma^2)\right)
++ 2 \log\left|{\bf L}_Z\right|.
+\end{equation*}
+
+Using a REML approach,
+
+\begin{equation*}
+p(\sigma^2 \mid {\bf Y}, \Lambda) \propto (\sigma^2)^{-(N - P)/2 -
+  \alpha - 1} \left|{\bf L}_Z\right|^{-1} \left|{\bf L}_X\right|^{-1}
+\exp\left\{-\frac{1}{\sigma^2}\left[ \frac{1}{2}
+\left\|\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix} -
+\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix} \right\|^2 +
+\tau
+\right]\right\}.
+\end{equation*}
+
+$\hat\sigma^2$ is obtained similarly, and the associated objective function is
+
+\begin{equation*}
+d(\Lambda) = (N - P + 2\alpha + 2)\left(1 + \log(2 \pi\hat\sigma^2)\right)
++ 2 \log\left|{\bf L}_Z\right| + 2\log\left|{\bf L}_X\right|^{-1}.
+\end{equation*}
+
+If we have a prior on $\beta$, the first derivative becomes:
+
+\begin{equation*}
+\frac{\partial}{\partial\sigma}
+\log p(\hat\beta, \sigma \mid {\bf Y}, \Lambda) =
+-(N + 2\alpha + 2)\frac{1}{\sigma} + \frac{1}{\sigma^3}\left({\bf
+    Y}^\top{\bf Y} - \utilde{\theta}^\top\utilde{\theta} -
+  \utilde{\beta}^\top(\sigma)\utilde{\beta}(\sigma) +2\tau\right) +
+\frac{1}{2\sigma^2}\frac{\partial}{\partial\sigma}
+\utilde{\beta}^\top(\sigma)\utilde{\beta}(\sigma).
+\end{equation*}
+
+The second derivative is:
+\begin{multline*}
+\frac{\partial^2}{(\partial\sigma)^2}
+\log p(\hat\beta, \sigma \mid {\bf Y}, \Lambda) =
+(N + 2\alpha + 2) \frac{1}{\sigma^2} - \frac{3}{\sigma^4} \left({\bf Y}^\top{\bf
+    Y}-\utilde\theta^\top\utilde\theta
+  -\left\|\utilde\beta(\sigma)\right\|^2 + 2\tau\right) + \\
+\frac{3}{\sigma^2}\left\| {\bf L}_\beta^{-1}{\bf
+    L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2 +
+4\left\| {\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-\top} {\bf L}_\beta^{-1}{\bf
+    L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2.
+\end{multline*}
 \end{document}

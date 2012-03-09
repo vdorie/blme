@@ -31,11 +31,11 @@ void singleMatrixCrossproductWithUpdate(const double *source, int numRows, int n
                                         double crossproductScale, double *target,
                                         int useTranspose, triangleType_t triangleType);
 // y = Ax or y = A'x
-void multiplyMatrixByVector(const double *sourceMatrix, int numRows, int numCols, int useTranpose,
-                            const double *sourceVector, double *target);
+void applyMatrixToVector(const double *sourceMatrix, int numRows, int numCols, int useTranpose,
+                         const double *sourceVector, double *target);
 // y: = Ax + b * y or y:= A'x + b*y;
-void multiplyMatrixByVectorWithUpdate(const double *sourceMatrix, int numRows, int numCols, int useTranpose,
-                                      const double *sourceVector, double productScale, double *target);
+void applyMatrixToVectorWithUpdate(const double *sourceMatrix, int numRows, int numCols, int useTranpose,
+                                   const double *sourceVector, double productScale, double *target);
                            
 void transposeMatrix(const double *source, int numRowsSource, int numColsSource,
                      double *target);
@@ -73,7 +73,7 @@ void invertUnitLowerTriangularMatrix(const double *source, int dim,
                                double *target);
 void invertUpperTriangularMatrix(const double *source, int dim, double *target);
 void invertUnitUpperTriangularMatrix(const double *source, int dim,
-                               double *target);
+                                     double *target);
                                
 
 // eigen values and eigen vectors from a positive definite, symmetric matrix

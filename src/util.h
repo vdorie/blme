@@ -50,5 +50,6 @@ void printMatrix(const double *matrix, int numRows, int numColumns);
 // the object's slot, and returns it
 SEXP ALLOC_SLOT(SEXP obj, SEXP nm, SEXPTYPE type, int length);
 SEXP SET_DIMS(SEXP obj, int numRows, int numCols);
+SEXP getListElement(SEXP list, char const* name);
 
 #endif // BLME_UTIL_H

@@ -137,7 +137,7 @@ isLinearMixedModel <- function(regression) {
 }
 
 
-buildStringForFamily <- function(families, scales, hyperparameters)
+buildStringForFamily <- function(families, scales, hyperparameters, preprocessed)
 {
   matchedCall <- match.call();
   
@@ -165,6 +165,9 @@ buildStringForFamily <- function(families, scales, hyperparameters)
         ", ", SCALE_HYPERPARAMETER_NAME, " = ", hyperparameters[2],
         ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", scaleEnumeration[scales[1] + 1],
         ")", sep="");
+    numFamiliesUsed <- 1;
+    numScalesUsed <- 1;
+    numHyperparametersUsed <- 2;
   } else if (families[1] == getEnumOrder(familyEnumeration, WISHART_FAMILY_NAME)) {
     scaleInverse <- hyperparameters[3:length(hyperparameters)];
     levelDimension <- round(sqrt(length(scaleInverse)), digits=0);
@@ -199,13 +202,17 @@ buildStringForFamily <- function(families, scales, hyperparameters)
     }
     cat(")");
   } else if (families[1] == getEnumOrder(familyEnumeration, NORMAL_FAMILY_NAME)) {
-    covariance <- hyperparameters;
-
-    cat("(", COVARIANCE_HYPERPARAMETER_NAME, " = ", sep = "");
-    if (length(hyperparameters) == 1) {
+    numParams <- length(hyperparameters);
+    
+    if (preprocessed) {
+      cat("(", COVARIANCE_HYPERPARAMETER_NAME, " = ", sep = "");
+    } else {
+      cat("(hyperparams = ");
+    }
+    if (numParams == 1) {
       cat(hyperparameters[1]);
     } else {
-      if (length(hyperparameters) > 4)
+      if (numParams > 4)
         cat("c(", toString(format(hyperparameters[1:4], digits=2, scientific=TRUE)), ", ...)", sep="")
       else
         cat("c(", toString(format(hyperparameters, digits=2, scientific=TRUE)), ")", sep="");
@@ -221,33 +228,9 @@ buildStringForFamily <- function(families, scales, hyperparameters)
   sink();
   close(stringConnection);
 
-  env <- parent.frame();
-  if (numFamiliesUsed > 0) {
-    familiesVariableName <- as.character(matchedCall$families);
-    if (length(families) <= numFamiliesUsed) {
-      env[[familiesVariableName]] <- integer(0);
-    } else {
-      env[[familiesVariableName]] <- families[-(1:numFamiliesUsed)];
-    }
-  }
 
-  if (numScalesUsed > 0) {
-    scalesVariableName <- as.character(matchedCall$scales);
-    if (length(scales) <= numScalesUsed) {
-      env[[scalesVariableName]] <- integer(0);
-    } else {
-      env[[scalesVariableName]] <- scales[-(1:numScalesUsed)];
-    }
-  }
-
-  if (numHyperparametersUsed > 0) {
-    hyperparametersVariableName <- as.character(matchedCall$hyperparameters);
-    if (length(hyperparameters) <= numHyperparametersUsed) {
-      env[[hyperparametersVariableName]] <- integer(0);
-    } else {
-      env[[hyperparametersVariableName]] <- hyperparameters[-(1:numHyperparametersUsed)];
-    }
-  }
-  
-  return(string = stringResult);
+  # families used and the like are only relevant to decompositions with
+  # multiple families and a mess of hyperparameters in a single object
+  return(list(string = stringResult, numFamiles = numFamiliesUsed,
+              numScales = numScalesUsed, numHyperparameters = numHyperparametersUsed));
 }

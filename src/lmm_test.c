@@ -172,8 +172,10 @@ static int calculateJointMode_test(SEXP regression, MERCache *cache)
 
 static int calculateDevianceAndCommonScale_test(SEXP regression)
 {
-  updateDeviance(regression);
-  profileCommonScale(regression);
+  MERCache *cache = createLMMCache(regression);
+  
+  updateDeviance(regression, cache);
+  profileCommonScale(regression, cache);
   
   double correctWeightedResidualSumOfSquares = 2.9906203297744;
   double correctPenaltySumOfSquares = 0.684162111054328;

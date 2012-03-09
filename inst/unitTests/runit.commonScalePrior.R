@@ -81,6 +81,39 @@ test.blme.parsePrior.var.prior <- function()
     checkEquals(length(prior@hyperparameters), 1);
     checkEquals(prior@families[1], blme:::getEnumOrder(blme:::familyEnumeration, "point"));
     checkEquals(prior@hyperparameters, 2);
-    checkEquals(prior@scales[1], blme:::getEnumOrder(blme:::scaleEnumeration, "var"))
+    checkEquals(prior@scales[1], blme:::getEnumOrder(blme:::scaleEnumeration, "var"));
+  }
+
+  prior <- blme:::parsePrior(model1, var.prior = "inverse.gamma")
+  {
+    checkEquals(prior@type, blme:::getEnumOrder(blme:::typeEnumeration, "direct"));
+    checkEquals(length(prior@families), 1);
+    checkEquals(length(prior@scales), 1);
+    checkEquals(length(prior@hyperparameters), 2);
+    checkEquals(prior@families[1], blme:::getEnumOrder(blme:::familyEnumeration, "inverse.gamma"));
+    checkEquals(prior@hyperparameters, c(0, 0));
+    checkEquals(prior@scales[1], blme:::getEnumOrder(blme:::scaleEnumeration, "var"));
+  }
+
+  prior <- blme:::parsePrior(model1, var.prior = "inverse.gamma(2, 0.5)")
+  {
+    checkEquals(prior@type, blme:::getEnumOrder(blme:::typeEnumeration, "direct"));
+    checkEquals(length(prior@families), 1);
+    checkEquals(length(prior@scales), 1);
+    checkEquals(length(prior@hyperparameters), 2);
+    checkEquals(prior@families[1], blme:::getEnumOrder(blme:::familyEnumeration, "inverse.gamma"));
+    checkEquals(prior@hyperparameters, c(2, 0.5));
+    checkEquals(prior@scales[1], blme:::getEnumOrder(blme:::scaleEnumeration, "var"));
+  }
+
+  prior <- blme:::parsePrior(model1, var.prior = "inverse.gamma(posterior.scale = 'sd', shape = 3)")
+  {
+    checkEquals(prior@type, blme:::getEnumOrder(blme:::typeEnumeration, "direct"));
+    checkEquals(length(prior@families), 1);
+    checkEquals(length(prior@scales), 1);
+    checkEquals(length(prior@hyperparameters), 2);
+    checkEquals(prior@families[1], blme:::getEnumOrder(blme:::familyEnumeration, "inverse.gamma"));
+    checkEquals(prior@hyperparameters, c(3 / 2, 0));
+    checkEquals(prior@scales[1], blme:::getEnumOrder(blme:::scaleEnumeration, "sd"));
   }
 }

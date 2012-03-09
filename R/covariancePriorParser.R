@@ -413,7 +413,7 @@ covariancePriorToString <- function(regression)
   factorNames <- expandFactorNames(regression);
   for (i in 1:numFactors) {
     prior <- regression@cov.prior[[i]];
-
+    
     families <- prior@families;
     scales <- prior@scales;
     hyperparameters <- prior@hyperparameters;
@@ -423,29 +423,41 @@ covariancePriorToString <- function(regression)
     cat(factorNames[i], "~ ");
     
     if (prior@type == getEnumOrder(typeEnumeration, DIRECT_TYPE_NAME)) {
-      cat(buildStringForFamily(families, scales, hyperparameters), "\n", sep = "");
+      cat(buildStringForFamily(families, scales, hyperparameters, TRUE)$string,
+          "\n", sep = "");
     } else if (prior@type == getEnumOrder(typeEnumeration, CORRELATION_TYPE_NAME)) {
       coordinateNames <- colnames(regression@ST[[i]]);
       
       cat(typeEnumeration[prior@type + 1], "\n", sep = "");
       
       for (j in 1:length(coordinateNames)) {
-        cat("  ", coordinateNames[j], " ~ ",
-            buildStringForFamily(families, scales, hyperparameters), "\n", sep = "");
+        familyString <- buildStringForFamily(families, scales, hyperparameters, TRUE);
+        cat("  ", coordinateNames[j], " ~ ", stringResult$familyString, "\n", sep = "");
+
+        families <- families[(familyString$numFamilies + 1):length(families)];
+        scales   <- scales[(familyString$numScales + 1):length(families)];
+        hyperparameters <- hyperparameters[(familyString$numHyperparameters + 1):
+                                           length(hyperparameters)];
+        
       }
-      cat("  ", buildStringForFamily(families, scales, hyperparameters), "\n", sep="");
+      cat("  ", buildStringForFamily(families, scales, hyperparameters, TRUE), "\n", sep="");
     } else if (prior@type == getEnumOrder(typeEnumeration, SPECTRAL_TYPE_NAME)) {
       coordinateNames <- colnames(regression@ST[[i]]);
       
       cat(typeEnumeration[prior@type + 1], "\n", sep = "");
       
       for (j in 1:length(coordinateNames)) {
-        cat("  ", j, " ~ ",
-            buildStringForFamily(families, scales, hyperparameters), "\n", sep = "");
+        familyString <- buildStringForFamily(families, scales, hyperparameters, TRUE);
+        cat("  ", j, " ~ ", familyString$string, "\n", sep = "");
+        
+        families <- families[(familyString$numFamilies + 1):length(families)];
+        scales   <- scales[(familyString$numScales + 1):length(families)];
+        hyperparameters <- hyperparameters[(familyString$numHyperparameters + 1):
+                                           length(hyperparameters)];
       }
     } else cat("unknown\n");
   }
-
+  
   sink();
   close(stringConnection);
 

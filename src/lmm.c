@@ -11,22 +11,11 @@
 #include "blmer.h"
 #include "unmodeledCoefficientPrior.h"
 
+#include "__lmmMerCache.h"
+
 #include "common_inlines.h"
 
 extern cholmod_common cholmodCommon;
-
-struct _MERCache {
-  double *weightedDenseDesignMatrix;
-  double *weightedResponse;
-  
-  double *downdatedDenseResponseRotation; // X'y - Lzx * theta half projection
-  double *downdatedDenseCrossproduct;     // X'X - LzxRzx
-  double *unmodeledCoefProjection;    // Rx^-T (X'y - Lzx * theta half projection)
-  double *modeledCoefProjection;      // Lz^-1 A y (A being rotated Z')
-  
-  double responseSumOfSquares;
-  double modeledCoefSumOfSquares;
-};
 
 
 #define COMMON_SCALE_OPTIMIZATION_TOLERANCE 1.0e-10
@@ -43,8 +32,6 @@ static void updateOffDiagonalCholeskyBlock(SEXP regression, MERCache *cache);
 static void updateLowerRightCholeskyBlock(SEXP regression, MERCache *cache);
 
 // used to update the common scale when it can't be profiled out
-static void
-getDerivatives(SEXP regression, MERCache *cache, double *firstDerivative, double *secondDerivative);
 static void
 updateRegressionForNewCommonScale(SEXP regression, MERCache *cache);
 
@@ -85,6 +72,26 @@ MERCache *createLMMCache(SEXP regression)
       
     weightedResponse[row] = (response[row] - (offsets ? offsets[row] : 0.0)) * rowWeight;
     result->responseSumOfSquares += weightedResponse[row] * weightedResponse[row];
+  }
+  
+  result->priorDegreesOfFreedom = 0.0;
+  result->priorPenalty = 0.0;
+  SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
+  if (PRIOR_TYPE_SLOT(commonScalePrior) == PRIOR_TYPE_DIRECT &&
+      PRIOR_FAMILIES_SLOT(commonScalePrior)[0] == PRIOR_FAMILY_INVGAMMA)
+  {
+    double* hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(commonScalePrior);
+    
+    result->priorDegreesOfFreedom += 2.0 * (hyperparameters[0] + 1.0);
+    result->priorPenalty          += 2.0 *  hyperparameters[1];
+  }
+  
+  SEXP unmodeledCoefPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
+  if (PRIOR_TYPE_SLOT(unmodeledCoefPrior) == PRIOR_TYPE_DIRECT &&
+      PRIOR_FAMILIES_SLOT(unmodeledCoefPrior)[0] == PRIOR_FAMILY_GAUSSIAN &&
+      PRIOR_SCALES_SLOT(unmodeledCoefPrior)[0] == PRIOR_SCALE_COMMON)
+  {
+    result->priorDegreesOfFreedom += (double) numUnmodeledCoefs;
   }
   
   return(result);
@@ -134,9 +141,9 @@ double lmmCalculateDeviance(SEXP regression, MERCache *cache)
   }
   
   rotateProjections(regression, cache);
-  updateDeviance(regression);
+  updateDeviance(regression, cache);
   
-  if (canProfileCommonScale(regression)) profileCommonScale(regression);
+  if (canProfileCommonScale(regression)) profileCommonScale(regression, cache);
   
   return (deviances[dims[isREML_POS] ? REML_POS : ML_POS]);
 }
@@ -154,8 +161,8 @@ double lmmApproximateDeviance(SEXP regression, MERCache *cache)
   calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
   rotateProjections(regression, cache);
   
-  updateDeviance(regression);
-  // note, we do not do: profileCommonScale(regression);
+  updateDeviance(regression, cache);
+  // note, we do not do: profileCommonScale(regression, cache);
 
   return (deviances[dims[isREML_POS] ? REML_POS : ML_POS]);
 }
@@ -191,7 +198,7 @@ void updateAugmentedDesignMatrixFactorizations(SEXP regression, MERCache *cache)
   DEBUG_PRINT_ARRAY("RX ", RX_SLOT(regression), dims[p_POS] * dims[p_POS] > 10 ? 10 : dims[p_POS] * dims[p_POS]);
 }
 
-void updateDeviance(SEXP regression)
+void updateDeviance(SEXP regression, MERCache* cache)
 {
   int    *dims      = DIMS_SLOT(regression);
   double *deviances = DEV_SLOT(regression);
@@ -200,19 +207,11 @@ void updateDeviance(SEXP regression)
   
   deviances[usqr_POS] = getSumOfSquares(U_SLOT(regression), numModeledCoefs);
   // weighted residual sum of squares is the penalized version, minus the penalty
-  deviances[wrss_POS] = deviances[disc_POS] = deviances[pwrss_POS] - deviances[usqr_POS];
+  deviances[wrss_POS] = deviances[disc_POS] = (deviances[pwrss_POS] - deviances[usqr_POS]) - cache->priorPenalty;
   
-  double   MLDegreesOfFreedom = (double)  dims[n_POS];
-  double REMLDegreesOfFreedom = (double) (dims[n_POS] - dims[p_POS]);
+  double   MLDegreesOfFreedom = cache->priorDegreesOfFreedom + (double)  dims[n_POS];
+  double REMLDegreesOfFreedom = cache->priorDegreesOfFreedom + (double) (dims[n_POS] - dims[p_POS]);
   
-  SEXP unmodeledCoefPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
-  if (PRIOR_TYPE_SLOT(unmodeledCoefPrior) == PRIOR_TYPE_DIRECT &&
-      PRIOR_FAMILIES_SLOT(unmodeledCoefPrior)[0] == PRIOR_FAMILY_GAUSSIAN &&
-      PRIOR_SCALES_SLOT(unmodeledCoefPrior)[0] == PRIOR_SCALE_COMMON)
-  {
-      MLDegreesOfFreedom += (double) dims[p_POS];
-    REMLDegreesOfFreedom += (double) dims[p_POS];
-  }
 
   // see attached math for how this is the deviance
   if (canProfileCommonScale(regression)) {    
@@ -231,24 +230,15 @@ void updateDeviance(SEXP regression)
   }
 }
 
-void profileCommonScale(SEXP regression)
+void profileCommonScale(SEXP regression, MERCache* cache)
 {
   int    *dims      = DIMS_SLOT(regression);
   double *deviances = DEV_SLOT(regression);
   
   int numObservations = dims[n_POS];
 
-  double   MLDegreesOfFreedom = (double)  dims[n_POS];
-  double REMLDegreesOfFreedom = (double) (dims[n_POS] - dims[p_POS]);
-  
-  SEXP unmodeledCoefPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
-  if (PRIOR_TYPE_SLOT(unmodeledCoefPrior) == PRIOR_TYPE_DIRECT &&
-      PRIOR_FAMILIES_SLOT(unmodeledCoefPrior)[0] == PRIOR_FAMILY_GAUSSIAN &&
-      PRIOR_SCALES_SLOT(unmodeledCoefPrior)[0] == PRIOR_SCALE_COMMON)
-  {
-      MLDegreesOfFreedom += (double) dims[p_POS];
-    REMLDegreesOfFreedom += (double) dims[p_POS];
-  }
+  double   MLDegreesOfFreedom = cache->priorDegreesOfFreedom + (double)  dims[n_POS];
+  double REMLDegreesOfFreedom = cache->priorDegreesOfFreedom + (double) (dims[n_POS] - dims[p_POS]);
   
   double *sqrtResidualWeight = SRWT_SLOT(regression);
   
@@ -522,7 +512,7 @@ static void updateOffDiagonalCholeskyBlock(SEXP regression, MERCache *cache)
                             offDiagonalBlockRightFactorization);
 }
 
-static void updateLowerRightCholeskyBlock(SEXP regression, MERCache *cache)
+void computeDowndatedDenseCrossproduct(SEXP regression, MERCache* cache, double* target)
 {
   int *dims = DIMS_SLOT(regression);
   
@@ -531,31 +521,39 @@ static void updateLowerRightCholeskyBlock(SEXP regression, MERCache *cache)
   int numUnmodeledCoefs = dims[p_POS];
   
   double *denseDesignMatrix = X_SLOT(regression);
-  
   double *offDiagonalBlockRightFactorization = RZX_SLOT(regression);
+  
+  int modelIncludesWeights = SXWT_SLOT(regression) != NULL;
+  if (modelIncludesWeights) denseDesignMatrix = cache->weightedDenseDesignMatrix;
+  
+  // downdate X'X
+  singleMatrixCrossproduct(denseDesignMatrix, numObservations, numUnmodeledCoefs,
+                           target, FALSE, TRIANGLE_TYPE_UPPER);
+  
+  singleMatrixCrossproductWithUpdate(offDiagonalBlockRightFactorization, numModeledCoefs, numUnmodeledCoefs, -1.0,
+                                     target, FALSE, TRIANGLE_TYPE_UPPER);
+}
+
+static void updateLowerRightCholeskyBlock(SEXP regression, MERCache *cache)
+{
+  int *dims = DIMS_SLOT(regression);
+  double commonScale = DEV_SLOT(regression)[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
+  
+  int numUnmodeledCoefs = dims[p_POS];
+  
   double *lowerRightBlockRightFactorization  = RX_SLOT(regression);
   
   
-  int modelIncludesWeights = SXWT_SLOT(regression) != NULL;
+  computeDowndatedDenseCrossproduct(regression, cache, lowerRightBlockRightFactorization);
   
-  if (modelIncludesWeights) denseDesignMatrix = cache->weightedDenseDesignMatrix;
-
-  
-  /* downdate X'X and factor  */
-  // compute X'X
-  singleMatrixCrossproduct(denseDesignMatrix, numObservations, numUnmodeledCoefs,
-                           lowerRightBlockRightFactorization, FALSE, TRIANGLE_TYPE_UPPER);
-
-  singleMatrixCrossproductWithUpdate(offDiagonalBlockRightFactorization, numModeledCoefs, numUnmodeledCoefs, -1.0,
-                                     lowerRightBlockRightFactorization, FALSE, TRIANGLE_TYPE_UPPER);
-
   if (!canProfileCommonScale(regression)) {
     Memcpy(cache->downdatedDenseCrossproduct, (const double *) lowerRightBlockRightFactorization,
            numUnmodeledCoefs * numUnmodeledCoefs);
   }
   
-  addGaussianContributionToDenseBlock(regression, lowerRightBlockRightFactorization);
-  
+  addGaussianContributionToDenseBlock(regression, lowerRightBlockRightFactorization, commonScale);
+
+  // factor result
   int choleskyResult = getDenseCholeskyDecomposition(lowerRightBlockRightFactorization, numUnmodeledCoefs,
                                                      TRIANGLE_TYPE_UPPER);
 
@@ -617,16 +615,16 @@ calculateProjections(SEXP regression, MERCache *cache)
   DEBUG_PRINT_ARRAY("T~ ", modeledCoefProjection, numModeledCoefs > 10 ? 10 : numModeledCoefs);
   // solve RX' del2 = X'y - RZX'del1
   // compute X'y and store it into a temp
-  multiplyMatrixByVector(denseDesignMatrix, numObservations, numUnmodeledCoefs, TRUE /* use transpose */,
-                         response, unmodeledCoefProjection);
+  applyMatrixToVector(denseDesignMatrix, numObservations, numUnmodeledCoefs, TRUE /* use transpose */,
+                      response, unmodeledCoefProjection);
   // compute X'y - RZX' * L^-1 PAy and store back into the same temp
-  multiplyMatrixByVectorWithUpdate(offDiagonalBlockRightFactorization, numModeledCoefs, numUnmodeledCoefs,
-                                   TRUE /* use transpose */,
-                                   modeledCoefProjection,
-                                   -1.0 /* matrix product is multiplied by this before being added to the target */,
-                                   unmodeledCoefProjection);
+  applyMatrixToVectorWithUpdate(offDiagonalBlockRightFactorization, numModeledCoefs, numUnmodeledCoefs,
+                                TRUE /* use transpose */,
+                                modeledCoefProjection,
+                                -1.0 /* matrix product is multiplied by this before being added to the target */,
+                                unmodeledCoefProjection);
   
-  if (!canProfileCommonScale(regression)) {
+  if (commonScaleRequiresOptimization(regression)) {
     Memcpy(cache->downdatedDenseResponseRotation, (const double *) unmodeledCoefProjection,
            numUnmodeledCoefs);
   }
@@ -671,6 +669,8 @@ calculatePenalizedWeightedResidualSumOfSquaresFromProjections(SEXP regression, M
     (getSumOfSquares(unmodeledCoefProjection, numUnmodeledCoefs) +
      getSumOfSquares(modeledCoefProjection, numModeledCoefs));
 
+  deviances[pwrss_POS] += cache->priorPenalty;
+  
 #ifdef PRINT_TRACE
   double ssy = getSumOfSquares(response, numObservations), sstheta = getSumOfSquares(modeledCoefProjection, numModeledCoefs), ssbeta = getSumOfSquares(unmodeledCoefProjection, numUnmodeledCoefs);
   Rprintf("ss : %llu %llu %llu %llu\n", *((unsigned long long *) (deviances + pwrss_POS)),
@@ -708,10 +708,10 @@ void rotateProjections(SEXP regression, MERCache *cache)
                   &numUnmodeledCoefs, unmodeledCoef, &i_one);
   
   // subtract from modeled coef projection RZX * beta_tilde
-  multiplyMatrixByVectorWithUpdate(offDiagonalBlockRightFactorization, numModeledCoefs, numUnmodeledCoefs,
-                                   FALSE /* don't use transpose */,
-                                   unmodeledCoef, -1.0,
-                                   modeledCoef);
+  applyMatrixToVectorWithUpdate(offDiagonalBlockRightFactorization, numModeledCoefs, numUnmodeledCoefs,
+                                FALSE /* don't use transpose */,
+                                unmodeledCoef, -1.0,
+                                modeledCoef);
   
   // u = L^-T (u - RZX beta_tilde)
   solveSparseCholeskySystem(CHOLMOD_Lt, upperLeftBlockLeftFactorization,
@@ -736,10 +736,15 @@ updateRegressionForNewCommonScale(SEXP regression, MERCache *cache)
   Memcpy(lowerRightBlockRightFactorization, (const double *) cache->downdatedDenseCrossproduct,
          numUnmodeledCoefs * numUnmodeledCoefs);
   
-  addGaussianContributionToDenseBlock(regression, lowerRightBlockRightFactorization);
   
-  getDenseCholeskyDecomposition(lowerRightBlockRightFactorization, numUnmodeledCoefs, TRIANGLE_TYPE_UPPER);
+  addGaussianContributionToDenseBlock(regression, lowerRightBlockRightFactorization,
+                                      deviances[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS]);
+  
+  int choleskyResult = getDenseCholeskyDecomposition(lowerRightBlockRightFactorization, numUnmodeledCoefs, TRIANGLE_TYPE_UPPER);
 
+  if (choleskyResult > 0) error("Leading minor %d of downdated X'X is not positive definite.", choleskyResult);
+  if (choleskyResult < 0) error("Illegal argument %d to cholesky decomposition (dpotrf).", -choleskyResult);
+  
   deviances[ldRX2_POS] = 0.0;
   for (int j = 0; j < numUnmodeledCoefs; ++j) {
     deviances[ldRX2_POS] += 2.0 * log(lowerRightBlockRightFactorization[j * (numUnmodeledCoefs + 1)]);
@@ -762,189 +767,9 @@ updateRegressionForNewCommonScale(SEXP regression, MERCache *cache)
                   &numUnmodeledCoefs,
                   unmodeledCoefProjection,
                   &i_one);
-
-  double unmodeledCoefSumOfSquares = getSumOfSquares(unmodeledCoefProjection, numUnmodeledCoefs);
   
   // now update the penalized, weighted residual sum of squares
-  deviances[pwrss_POS] = cache->responseSumOfSquares - (cache->modeledCoefSumOfSquares + unmodeledCoefSumOfSquares);
-}
-
-// As Newton's method is x_n+1 = x_n - f'(x) / f"(x), this function
-// computes f'(x) and f"(x) as a function of the common scale
-//
-// the calculations it uses are in the accompanying pdf, but briefly
-// the first derivative is related to the sample size, the residual sum of
-// squares, and a new term which involves rotating the projection
-// of the unmodeled coefficients
-//
-// the second derivative involves all of the above, plus the projection
-// of the unmodeled coefficients rotated twice
-//
-// that is
-//   f'(x) = a * N + b * PWRSS + c * || Rx^-1 beta.tilde ||^2
-//   f"(x) = d * N + e * PWRSS + f * || Rx^-1 beta.tilde ||^2 + g * || Rx^-T Rx^-1 beta.tilde ||^2
-static void
-getDerivatives(SEXP regression, MERCache *cache,
-               double *firstDerivative, double *secondDerivative)
-{
-  int    *dims      = DIMS_SLOT(regression);
-  double *deviances = DEV_SLOT(regression);
-  
-  int i_one = 1;
-  double d_one = 1.0;
-  
-  int numUnmodeledCoefs = dims[p_POS];
-  
-  SEXP unmodeledCoefPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
-  double *hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(unmodeledCoefPrior) + 1; // skip over the log det of the covar, not needed here
-  int numHyperparameters = LENGTH(GET_SLOT(unmodeledCoefPrior, blme_prior_hyperparametersSym)) - 1;
-  
-  
-  // take Rx and get Rx^-1
-  const double *lowerRightBlockRightFactorization = RX_SLOT(regression);
-  double rightFactorInverse[numUnmodeledCoefs * numUnmodeledCoefs]; // Rx^-1
-  invertUpperTriangularMatrix(lowerRightBlockRightFactorization, numUnmodeledCoefs, rightFactorInverse);
-  
-  // calculate Lbeta^-1 * Rx^-1
-  int factorIsTriangular = TRUE;
-  if (numHyperparameters == 1) {
-    // multiply by a scalar
-    //printMatrix(lowerRightBlockRightFactorization, numUnmodeledCoefs, numUnmodeledCoefs);
-    for (int col = 0; col < numUnmodeledCoefs; ++col) {
-      int offset = col * numUnmodeledCoefs;
-      for (int row = 0; row <= col; ++row) {
-        rightFactorInverse[offset++] *= hyperparameters[0];
-      }
-    }
-    //printMatrix(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs);
-  } else if (numHyperparameters == numUnmodeledCoefs) {
-    // left multiply by a diagonal matrix
-    double *diagonal = hyperparameters;
-    
-    for (int col = 0; col < numUnmodeledCoefs; ++col) {
-      int offset = col * numUnmodeledCoefs;
-      for (int row = 0; row <= col; ++row) {
-        rightFactorInverse[offset++] *= diagonal[row];
-      }
-    }
-  } else {
-    double *priorLeftFactorInverse = hyperparameters;
-    // want L * R
-    // Left multiply, Lower triangluar matrix, No-transpose, Non-unit
-    F77_CALL(dtrmm)("L", "L", "N", "N", &numUnmodeledCoefs, &numUnmodeledCoefs, &d_one,
-                    priorLeftFactorInverse, &numUnmodeledCoefs,
-                    rightFactorInverse, &numUnmodeledCoefs);
-    factorIsTriangular = FALSE;
-  }
-  
-  double projectionRotation[numUnmodeledCoefs];
-  Memcpy(projectionRotation, (const double *) cache->unmodeledCoefProjection, numUnmodeledCoefs);
-  
-  // this step corresponds to Rx^-1 * modeled coef projection
-  if (factorIsTriangular) {
-    // x <- Ax, A triangular. 
-    // Here, A is Upper triangular, Non-tranposed, and Non-unit-diagonal
-
-    F77_CALL(dtrmv)("U", "N", "N",
-                    &numUnmodeledCoefs,
-                    rightFactorInverse, &numUnmodeledCoefs,
-                    projectionRotation, &i_one);
-  } else {
-    multiplyMatrixByVector(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs, FALSE,
-                           projectionRotation, projectionRotation);
-  }
-  
-  double firstRotationSumOfSquares = getSumOfSquares(projectionRotation, numUnmodeledCoefs);
-  
-  // now for Rx^-T Rx^-1 * modeled coef projection
-  if (factorIsTriangular) {
-    F77_CALL(dtrmv)("U", "T", "N",
-                    &numUnmodeledCoefs,
-                    rightFactorInverse, &numUnmodeledCoefs,
-                    projectionRotation, &i_one);
-  } else {
-    multiplyMatrixByVector(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs, TRUE,
-                           projectionRotation, projectionRotation);
-  }
-  
-  double secondRotationSumOfSquares = getSumOfSquares(projectionRotation, numUnmodeledCoefs);
-  
-  
-  double degreesOfFreedom = (double) (dims[isREML_POS] ? (dims[n_POS] - dims[p_POS]) : dims[n_POS]);
-  double currCommonSd = deviances[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
-  double currCommonVariance = currCommonSd * currCommonSd;
-    
-  *firstDerivative =
-    (deviances[pwrss_POS] / currCommonVariance - firstRotationSumOfSquares -
-     degreesOfFreedom) / currCommonSd;
-  *secondDerivative =
-    (-3.0 * deviances[pwrss_POS] / currCommonVariance + 3.0 * firstRotationSumOfSquares +
-     degreesOfFreedom) / currCommonVariance + 4.0 * secondRotationSumOfSquares;
-  
-  // From here, done unless REML. REML involves taking the derivative of
-  // the log determinant of LxLx' (with some unmodeled covariance terms),
-  // which is just the trace of the product. The second derivative is
-  // the trace of the "square" of that product.
-  
-  if (dims[isREML_POS]) {
-    int covarianceMatrixLength = numUnmodeledCoefs * numUnmodeledCoefs;
-    double crossproduct[covarianceMatrixLength];
-    
-    // we square the left factor Lx^-T * Lx^-1. the trace of this is immediately
-    // useful, but we also need the trace of its square. Fortunately, the trace
-    // of AA' is simply the sum of the squares of all of the elements.
-    if (factorIsTriangular) {
-      singleTriangularMatrixCrossproduct(rightFactorInverse, numUnmodeledCoefs, TRUE,
-                                         TRIANGLE_TYPE_UPPER, crossproduct);
-    } else {
-      singleMatrixCrossproduct(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs,
-                               crossproduct, TRUE, TRIANGLE_TYPE_UPPER);
-    }
-    double firstOrderTrace = 0.0;
-    double secondOrderTrace = 0.0;
-    int offset;
-    // as the cross product is symmetric, we only have to use its upper
-    // triangle and the diagonal
-    for (int col = 0; col < numUnmodeledCoefs; ++col) {
-      offset = col * numUnmodeledCoefs;
-      for (int row = 0; row < col; ++row) {
-        secondOrderTrace += 2.0 * crossproduct[offset] * crossproduct[offset];
-        ++offset;
-      }
-      
-      firstOrderTrace  += crossproduct[offset];
-      secondOrderTrace += crossproduct[offset] * crossproduct[offset];
-    }
-    
-    *firstDerivative  -=  2.0 * currCommonSd * firstOrderTrace;
-    *secondDerivative += -2.0 * firstOrderTrace + 4.0 * currCommonVariance * secondOrderTrace;
-  }
-}
-
-// Externally callable. Sets up and fills a cache, then returns the computed
-// derivatives.
-//
-// Works on the **deviance** scale, so -2 * logLik.
-SEXP bmer_getDerivatives(SEXP regression) {
-  MERCache *cache = createLMMCache(regression);
-
-  rotateSparseDesignMatrix(regression);
-  updateWeights(regression, cache);
-  updateAugmentedDesignMatrixFactorizations(regression, cache);
-  
-  calculateProjections(regression, cache);
-  calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
-   
-  double firstDerivative;
-  double secondDerivative;
-  getDerivatives(regression, cache, &firstDerivative, &secondDerivative);
-  
-  deleteLMMCache(cache);
-  SEXP resultExp = PROTECT(allocVector(REALSXP, 2));
-  double *result = REAL(resultExp);
-  result[0] = -2.0 * firstDerivative;
-  result[1] = -2.0 * secondDerivative;
-  UNPROTECT(1);
-  
-  return(resultExp);
+  deviances[pwrss_POS]  = cache->responseSumOfSquares -
+    (getSumOfSquares(unmodeledCoefProjection, numUnmodeledCoefs) + cache->modeledCoefSumOfSquares);
+  deviances[pwrss_POS] += cache->priorPenalty;
 }

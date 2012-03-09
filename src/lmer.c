@@ -37,6 +37,7 @@
 #include <Matrix.h>		 /* for cholmod functions */
 
 #include "lmer.h"
+#include "Syms.h"
 #include "blmer.h"
 #include "util.h"
 #include "lmm.h"
@@ -404,7 +405,7 @@ static double update_L(SEXP x)
   double *deviances = DEV_SLOT(x);
 	double *residuals = RESID_SLOT(x), *mu = MU_SLOT(x), *muEta = MUETA_SLOT(x);
 	double *priorWeights = PWT_SLOT(x);
-  double *sqrtResidualWeight = SRWT_SLOT(x); // this is W^1/2 (in vector form)
+  double *sqrtResidualWeight = SRWT_SLOT(x); // this is W^1/2 (in vector form), sqrt(priorWeight / var)
   double *sqrtModelRowWeight = SXWT_SLOT(x); // W^1/2 * diag(d mu / d eta)
 	double *variances =  VAR_SLOT(x), *y = Y_SLOT(x), one[] = { 1.0, 0.0 };
   CHM_SP A = A_SLOT(x);
@@ -413,7 +414,7 @@ static double update_L(SEXP x)
   
   /* Update the square root weights and residuals. Re-evaluate the weighted residual sum of squares. */
   if (variances != NULL || priorWeights != NULL) {
-    deviances[wrss_POS] = 0;
+    deviances[wrss_POS] = 0.0;
     for (int j = 0; j < numObservations; ++j) {
 	    sqrtResidualWeight[j] = sqrt((priorWeights ? priorWeights[j] : 1.0) / (variances ? variances[j] : 1.0));
       
@@ -465,7 +466,7 @@ static double update_L(SEXP x)
 	    A = C;
     }
   }
-  /* factorize A, or C if C exists, where C = AW^(1/2)diag(d mu / d eta), and A = ST'Z' */
+  /* factorize AA', or CC' if C exists, where C = AW^(1/2)diag(d mu / d eta), and A = ST'Z' */
   if (!M_cholmod_factorize_p(A, one, NULL, 0 /*fsize*/, L, &cholmodCommon))
     error(_("cholmod_factorize_p failed: status %d, minor %d from ncol %d"),
           cholmodCommon.status, L->minor, L->n);
@@ -569,9 +570,14 @@ static double update_mu(SEXP x)
     Memcpy(mu, eta, n);
   }
   
+  int isLinearModel = !MUETA_SLOT(x) && !V_SLOT(x);
+  
+  // all of the following are already correct for lmms
+  if (isLinearModel) return d[pwrss_POS];
+  
   d[wrss_POS] = 0;		/* update resid slot and d[wrss_POS] */
   for (int i = 0; i < n; i++) {
-    res[i] = (y[i] - mu[i]) * (srwt ? srwt[i] : 1);
+    res[i] = (y[i] - mu[i]) * (srwt ? srwt[i] : 1.0);
     d[wrss_POS] += res[i] * res[i];
   }
   /* store u'u */
@@ -652,7 +658,7 @@ static void updateRemainingAugmentedDesignMatrixFactors(SEXP regression)
   int numUnmodeledCoefs             = dims[p_POS];
   int numReplicationsOfObservations = dims[s_POS];
   
-  double *lowerRightBlockRightFactorization     = RX_SLOT(regression);
+  double *lowerRightBlockRightFactorization  = RX_SLOT(regression);
   double *offDiagonalBlockRightFactorization = RZX_SLOT(regression);
   
   CHM_SP rotatedSparseDesignMatrix       = A_SLOT(regression);
@@ -1333,7 +1339,7 @@ SEXP mer_optimize(SEXP regression)
     }
     
     if (isAtBoundary(regression, optimizationParameters)) {
-      // this call will fail unless a prior with no mass on the boundary is used
+      // this call can return true unless a prior with no mass on the boundary is used
       deviance = INFINITY;
     } else {
       // copies the parameters into ST, fixef, and sigma, if necessary
@@ -1356,12 +1362,20 @@ SEXP mer_optimize(SEXP regression)
                      stateVLength, numOptimizationParameters, stateV, optimizationParameters);
   } while (stateIV[0] == 1 || stateIV[0] == 2); // continue while no convergence and no error;
   
-  updateRegressionWithParameters(regression, optimizationParameters);
-  rotateSparseDesignMatrix(regression);
+  DEBUG_PRINT_ARRAY("par", optimizationParameters, numOptimizationParameters);
   
-  if (!isLinearModel) {
+  updateRegressionWithParameters(regression, (const double *) optimizationParameters);
+  
+  if (isLinearModel) {
+    lmmCalculateDeviance(regression, cache);
+    deleteLMMCache(cache);
+  } else {
+    rotateSparseDesignMatrix(regression);
+    update_dev(regression);
+    // glmms are computed without building other matrix factors as we've
+    // optimized over the fixed effects
     updateRemainingAugmentedDesignMatrixFactors(regression);
-  } else deleteLMMCache(cache);
+  }
   
   update_ranef(regression);
   

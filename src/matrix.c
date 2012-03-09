@@ -173,7 +173,7 @@ void singleTriangularMatrixCrossproduct(const double *source, int dim, int useTr
       }
     }
   } else if (useTranspose == FALSE && sourceTriangleType == TRIANGLE_TYPE_LOWER) {
-    Memcpy(target, source, dim * dim);
+    Memcpy(target, (double* const) source, dim * dim);
     double d_one = 1.0;
     F77_CALL(dtrmm)("L", "L", "T", "N", &dim, &dim, &d_one, source,
                     &dim, target, &dim);
@@ -182,8 +182,8 @@ void singleTriangularMatrixCrossproduct(const double *source, int dim, int useTr
       for (int row = 0; row < col; ++row) target[row + dim * col] = target[col + dim * row];
     }
   } else {
-//    error("L'L and UU' multiplication not yet implemented.");
-    Memcpy(target, source, dim * dim);
+    // UU'
+    Memcpy(target, (double* const) source, dim * dim);
     double d_one = 1.0;
     F77_CALL(dtrmm)("R", "U", "T", "N", &dim, &dim, &d_one, source,
                     &dim, target, &dim);
@@ -219,7 +219,7 @@ void singleMatrixCrossproductWithUpdate(const double *source, int numRows, int n
   }
 }
 
-void multiplyMatrixByVector(const double *sourceMatrix, int numRows, int numCols, int useTranspose,
+void applyMatrixToVector(const double *sourceMatrix, int numRows, int numCols, int useTranspose,
                             const double *sourceVector, double *target)
 {
   char *shouldTransposeMatrix = (useTranspose ? "T" : "N");
@@ -236,7 +236,7 @@ void multiplyMatrixByVector(const double *sourceMatrix, int numRows, int numCols
                   target,
                   &i_one);
 }
-void multiplyMatrixByVectorWithUpdate(const double *sourceMatrix, int numRows, int numCols, int useTranspose,
+void applyMatrixToVectorWithUpdate(const double *sourceMatrix, int numRows, int numCols, int useTranspose,
                                       const double *sourceVector, double productScale, double *target)
 {
   char *shouldTransposeMatrix = (useTranspose ? "T" : "N");

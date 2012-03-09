@@ -3,7 +3,7 @@ blmer <-
            control = list(), start = NULL, verbose = FALSE, doFit = TRUE,
            subset, weights, na.action, offset, contrasts = NULL,
            model = TRUE, x = TRUE, cov.prior = "wishart",
-           fixef.prior = "normal", var.prior = NULL,
+           fixef.prior = "normal", var.prior = "inverse.gamma",
            ...)
 {
   mc <- match.call()
@@ -52,7 +52,7 @@ function(formula, data, family = gaussian, start = NULL,
          verbose = FALSE, nAGQ = 1, doFit = TRUE, subset, weights,
          na.action, offset, contrasts = NULL, model = TRUE,
          control = list(), cov.prior = "wishart",
-         fixef.prior = "normal", var.prior = NULL,
+         fixef.prior = "normal",
          ...)
 ### Fit a generalized linear mixed model
 {
@@ -101,7 +101,6 @@ function(formula, data, family = gaussian, start = NULL,
                 nAGQ = nAGQ, verbose = verbose,
                 covariancePrior = cov.prior,
                 unmodeledCoefficientPrior = fixef.prior,
-                commonScalePrior = var.prior,
                 callingEnvironment = parent.frame());
     if (doFit) {
         ans <- do.call(bglmer_finalize, ans)
@@ -191,7 +190,7 @@ blmer_finalize <- function(fr, FL, start, REML, verbose,
 
 bglmer_finalize <- function(fr, FL, glmFit, start, nAGQ, verbose,
                             covariancePrior, unmodeledCoefficientPrior,
-                            commonScalePrior, callingEnvironment)
+                            callingEnvironment)
 {
   if (is.list(start) && all(sort(names(start)) == sort(names(FL))))
     start <- list(ST = start)
@@ -266,7 +265,7 @@ bglmer_finalize <- function(fr, FL, glmFit, start, nAGQ, verbose,
   ans <- setPrior(ans,
                   covariancePrior,
                   unmodeledCoefficientPrior,
-                  commonScalePrior,
+                  NULL,
                   callingEnvironment);
   
   return (mer_finalize(ans));
