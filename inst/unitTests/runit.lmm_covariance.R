@@ -263,7 +263,8 @@ if (FALSE) {
   
   calculatePriorDeviance <- function(model) {
     priorDeviance <- 0;
-    commonScale <- ifelse(model@dims[["REML"]] == 1, model@deviance[["sigmaREML"]], model@deviance[["sigmaML"]])^2;
+    # commonScale <- ifelse(model@dims[["REML"]] == 1, model@deviance[["sigmaREML"]], model@deviance[["sigmaML"]])^2;
+    commonScale <- 1;
     
     for (i in 1:length(model@ST)) {
       prior <- model@cov.prior[[i]];
@@ -359,7 +360,7 @@ test.blme.blmer.covarPrior <- function()
     optimResults <- optim(stMatricesToVector(testModel@ST), deviance, lower=lowerBounds, upper=upperBounds,
                           method="L-BFGS-B", model = testModel, control=list(factr=1e-10));
   } else {
-    optimResults <- list(par = c(0.685799044462457, 2.08564836455654, -0.373384009803916, 0.756409362533568, 0.715198411044111, 0, -0.42926488178236, -0.820611020573745, 0.690451180666571));
+    optimResults <- list(par = c(0.68579905144862, 2.08564801478433, -0.373384320990132, 0.756409621411491, 0.715198300015867, 0, -0.429264936416881, -0.820611001702123, 0.690451125362165));
   }
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
@@ -380,7 +381,7 @@ test.blme.blmer.covarPrior <- function()
     optimResults <- optim(startingParameters, deviance, lower=lowerBounds, upper=upperBounds,
                           method="L-BFGS-B", model = testModel, control=list(factr=1e-10));
   } else {
-    optimResults <- list(par = c(0.568413468581491));
+    optimResults <- list(par = c(0.617248561865064));
   }
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 | g.1),
@@ -404,7 +405,7 @@ test.blme.blmer.covarPrior <- function()
     optimResults <- optim(startingParameters, deviance, lower=lowerBounds, upper=upperBounds,
                           method="L-BFGS-B", model = testModel, control=list(factr=1e-10));
   } else {
-    optimResults <- list(par = c(0.54696772180072));
+    optimResults <- list(par = c(0.72329764027013));
   }
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 | g.1),
@@ -430,7 +431,7 @@ test.blme.blmer.covarPrior <- function()
     optimResults <- optim(startingParameters, deviance, lower=lowerBounds, upper=upperBounds,
                           method="L-BFGS-B", model = testModel, control=list(factr=1e-10));
   } else {
-    optimResults <- list(par = c(0.951273179530019, 1.5140296305836, -0.0421474940236723));
+    optimResults <- list(par = c(0.668728821884935, 1.30060913502217, -0.10833699199526));
   }
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1),
@@ -453,7 +454,7 @@ test.blme.blmer.covarPrior <- function()
     optimResults <- optim(startingParameters, deviance, lower=lowerBounds, upper=upperBounds,
                           method="L-BFGS-B", model = testModel, control=list(factr=1e-10));
   } else {
-    optimResults <- list(par = c(0.575323198695935, 1.02384499613863, -0.102357523697821));
+    optimResults <- list(par = c(0.674426918252233, 1.04989475979372, -0.0579534987426132));
   }
   
   blmerFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1),

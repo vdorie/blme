@@ -26,6 +26,7 @@ double calculateCovarianceDeviance(SEXP prior, double commonScale, const double 
   priorType_t priorType = PRIOR_TYPE_SLOT(prior);
   
   double result = 0.0;
+  commonScale = 1.0;
   
   switch (priorType) {
     case PRIOR_TYPE_CORRELATION:

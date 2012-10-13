@@ -3,7 +3,8 @@ loadCovarianceDefaults <- function(env) {
   env$defaultSpectralPosteriorScale <- VAR_SCALE_NAME;
   env$defaultSpectralDataScale <- FREE_SCALE_NAME;
   env$defaultSpectralFamily <- GAMMA_FAMILY_NAME;
-  env$defaultSpectralGammaShape <- 2.0;
+  env$defaultSpectralGammaShape <-
+    expression(ifelse(posteriorScale == SD_SCALE_NAME, 2.0, 1.5));
   env$defaultSpectralGammaRate <-
     expression(ifelse(shape > 1,
                       (shape - 1) / ifelse(posteriorScale == SD_SCALE_NAME,
@@ -23,7 +24,8 @@ loadCovarianceDefaults <- function(env) {
   env$defaultCorrelationDataScale <- FREE_SCALE_NAME;
   env$defaultCorrelationCoordinateFamily <- GAMMA_FAMILY_NAME;
   env$defaultCorrelationMatrixFamily <- WISHART_FAMILY_NAME;
-  env$defaultCorrelationGammaShape <- 2.0;
+  env$defaultCorrelationGammaShape <-
+    expression(ifelse(posteriorScale == SD_SCALE_NAME, 2.0, 1.5));
   env$defaultCorrelationGammaRate <-
     expression(ifelse(shape > 1,
                       (shape - 1) / ifelse(posteriorScale == SD_SCALE_NAME,
@@ -35,7 +37,7 @@ loadCovarianceDefaults <- function(env) {
   env$defaultCorrelationInverseGammaScale <-
     expression(ifelse(posteriorScale == SD_SCALE_NAME, 10^1, 10^2) *
                (shape + 1));
-  env$defaultCorrelationWishartDegreesOfFreedom <- expression(factorDimension + 3);
+  env$defaultCorrelationWishartDegreesOfFreedom <- expression(factorDimension + 1);
   env$defaultCorrelationWishartScale <-
     expression(diag(10^2 / ifelse(degreesOfFreedom > factorDimension + 1,
                                      degreesOfFreedom - factorDimension - 1,
@@ -52,7 +54,8 @@ loadCovarianceDefaults <- function(env) {
   env$defaultDirectPosteriorScale <- SD_SCALE_NAME;
   env$defaultDirectDataScale <- FREE_SCALE_NAME;
   
-  env$defaultDirectGammaShape <- 2.0;
+  env$defaultDirectGammaShape <-
+    expression(ifelse(posteriorScale == SD_SCALE_NAME, 2.0, 1.5));
   env$defaultDirectGammaRate <-
     expression(ifelse(shape > 1,
                       (shape - 1) / ifelse(posteriorScale == SD_SCALE_NAME,
@@ -65,7 +68,7 @@ loadCovarianceDefaults <- function(env) {
     expression(ifelse(posteriorScale == SD_SCALE_NAME, 10^2, 10^4) *
         (shape + 1));
 
-  env$defaultDirectWishartDegreesOfFreedom <- expression(factorDimension + 3);
+  env$defaultDirectWishartDegreesOfFreedom <- expression(factorDimension + 1);
   env$defaultDirectWishartScale <-
     expression(diag(10^4 / ifelse(degreesOfFreedom > factorDimension + 1,
                                        degreesOfFreedom - factorDimension - 1,

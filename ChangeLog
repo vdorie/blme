@@ -1,3 +1,10 @@
+2012-10-13 10:11  Vincent Dorie <vincent@stat.columbia.edu>
+	* blme now ignores the common scale when penalizing the random effect covariance. In previous versions it multiplied it in but didn't take the prior into account when profiling it out - in essence failing to correspond to a probabilistic model. The next version will allow the prior to be on the scale-free covariance, or on the real-world covariance matrix. For now, just the scale-free version. ** This means the fitted models will be different than previous versions. **
+	* Reduced the default shape for random-effect covariance posteriors on the variance scale so that the polynomial term has an exponent of 1 in the univariate case. The multivariate now has df of dim + 1 to correspond.
+	* Fixed a few typos in the documentation.
+	* Cleaned up imports from NAMESPACE file.
+	* Replaced a .Internal call.
+
 2012-03-09 13:01  Vincent Dorie <vincent@stat.columbia.edu>
 
 	* Fixed off-by one bug on termination of the optimization loop which caused gradient evaluation steps to be reported a the maximum.

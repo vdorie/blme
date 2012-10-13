@@ -3,10 +3,8 @@
 # we use the package load hook to pull them into the namespace.
 .onLoad <- function(libname, pkgname)
 {
-  namespace <- .Internal(getRegisteredNamespace(pkgname));
-  if (is.null(namespace)) {
-    stop("cannot find name space environment");
-  }
+  namespace <- getNamespace(pkgname);
+  if (is.null(namespace)) stop("cannot find namespace environment, cannot load constants from C");
   
   loadConstants(namespace);
   loadCovarianceDefaults(namespace);

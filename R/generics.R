@@ -49,11 +49,11 @@ setMethod("summary", signature(object = "bmer"),
     if (!dims[["useSc"]]) {
       coefs <- coefs[, 1:2, drop = FALSE]
       stat <- coefs[,1]/coefs[,2]
-      pval <- 2*pnorm(abs(stat), lower = FALSE)
+      pval <- 2*pnorm(abs(stat), lower.tail = FALSE)
       coefs <- cbind(coefs, "z value" = stat, "Pr(>|z|)" = pval)
     } else {
       stat <- coefs[,1]/coefs[,2]
-      ##pval <- 2*pt(abs(stat), coefs[,3], lower = FALSE)
+      ##pval <- 2*pt(abs(stat), coefs[,3], lower.tail = FALSE)
       coefs <- cbind(coefs, "t value" = stat) #, "Pr(>|t|)" = pval)
     }
   } ## else : append columns to 0-row matrix ...
@@ -130,7 +130,7 @@ printBmer <- function(x, digits = max(3, getOption("digits") - 3),
         p <- ncol(corF)
         if (p > 1) {
           rn <- rownames(so@coefs)
-          rns <- abbreviate(rn, minlen=11)
+          rns <- abbreviate(rn, minlength=11)
           cat("\nCorrelation of Fixed Effects:\n")
           if (is.logical(symbolic.cor) && symbolic.cor) {
             corf <- as(corF, "matrix")
@@ -140,8 +140,8 @@ printBmer <- function(x, digits = max(3, getOption("digits") - 3),
           }
           else {
             corf <- matrix(format(round(corF@x, 3), nsmall = 3),
-                           nc = p,
-                           dimnames = list(rns, abbreviate(rn, minlen=6)))
+                           ncol = p,
+                           dimnames = list(rns, abbreviate(rn, minlength=6)))
             corf[!lower.tri(corf)] <- ""
             print(corf[-1, -p, drop=FALSE], quote = FALSE)
           }
