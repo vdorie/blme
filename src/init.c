@@ -18,6 +18,7 @@ static R_CallMethodDef CallEntries[] = {
     CALLDEF(mer_ST_getPars, 1),
     CALLDEF(mer_ST_initialize, 3),
     CALLDEF(mer_ST_setPars, 2),
+    CALLDEF(mer_update_dev, 1),
     CALLDEF(mer_create_L, 1),
     CALLDEF(mer_optimize, 1),
     CALLDEF(mer_update_ranef, 1),
@@ -26,13 +27,17 @@ static R_CallMethodDef CallEntries[] = {
     
     CALLDEF(bmer_sim, 2),
     
-    CALLDEF(bmer_get_dev, 1),
-    CALLDEF(bmer_approximate_dev, 1),
-    CALLDEF(bmer_getDerivatives, 1),
-    CALLDEF(bmer_calculatePriorPenalty, 1),
+    CALLDEF(bmer_getObjectiveFunction, 1),
+    CALLDEF(bmer_getPriorPenalty, 1),
+  
+    CALLDEF(bmer_getObjectiveFunctionForFixedCommonScale, 1),
+    CALLDEF(bmer_getCommonScaleDerivatives, 1),
+    CALLDEF(bmer_getOptimalCommonScale, 1),
     CALLDEF(bmer_getTypeEnumeration, 0),
     CALLDEF(bmer_getFamilyEnumeration, 0),
-    CALLDEF(bmer_getScaleEnumeration, 0),
+    CALLDEF(bmer_getPosteriorScaleEnumeration, 0),
+    CALLDEF(bmer_getCommonScaleEnumeration, 0),
+    CALLDEF(bmer_getScaleInt, 2),
     
     CALLDEF(bmer_findCommaInList, 1),
     

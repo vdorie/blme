@@ -3,7 +3,7 @@ Medium Priority:
   Permit the permutation of scale matrices with named rows/columns to match that of the factor
   Unit test with priors on both covariance and fixef?
   Doxygen headers for functions
-  sim
+  sim for covariance
   Shift mean of intercept for priors unmodeled coefs so that it is effectively centered
   Vignette
 
@@ -11,6 +11,5 @@ Low Priority:
   Full unit tests for various priors, glm case
   Approximate optimization for common scale when there's a prior on the fixef
   t-priors on unmodeled coefficients
-  Inverse gamma priors on the common scale
   Prove that way of handling Newton's method is correct
   Unify how positive definite matrices are handled from covariance and unmodeled coef parsers

@@ -1,3 +1,8 @@
+#					Dear Emacs, treat me as -*- Makefile -*-
 PKG_LIBS=$(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
-
 # PKG_CFLAGS:=$(PKG_CFLAGS) -DPRINT_TRACE
+
+## default 'lme4.so' does not work in Namespace registration for R <= 2.14.x
+all: lme4.so
+lme4.so: $(OBJECTS)
+	$(SHLIB_LINK) -o $@ $(OBJECTS) $(ALL_LIBS)

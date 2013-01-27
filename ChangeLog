@@ -1,3 +1,11 @@
+2012-11-13 10:25  Vincent Dorie <vincent@stat.columbia.edu>
+        * Common scale is now optional for random effect covariance, specified with the "common.scale" parameter and taking values TRUE/FALSE.
+        * Covariance priors can now all be improper.
+        * Common scale prior can now be inverse gamma on sd, or gamma.
+        * Reworked how the penalized weighted residual sum of squares is calculated, as it may not make sense depending on what priors are used.
+        * Brought to parity with the latest version of lme4, 0.999999 or so.
+        * Eliminated a false zero problem wherein the optimizer takes an initial step to the boundary and get stuck due to a flat likelihood.
+
 2012-10-13 10:11  Vincent Dorie <vincent@stat.columbia.edu>
 	* blme now ignores the common scale when penalizing the random effect covariance. In previous versions it multiplied it in but didn't take the prior into account when profiling it out - in essence failing to correspond to a probabilistic model. The next version will allow the prior to be on the scale-free covariance, or on the real-world covariance matrix. For now, just the scale-free version. ** This means the fitted models will be different than previous versions. **
 	* Reduced the default shape for random-effect covariance posteriors on the variance scale so that the polynomial term has an exponent of 1 in the univariate case. The multivariate now has df of dim + 1 to correspond.

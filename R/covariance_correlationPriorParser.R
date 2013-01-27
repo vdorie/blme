@@ -201,6 +201,7 @@ completeCorrelationPriorFromOptions <- function(regression, callingEnvironment, 
     prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     rate  <- getPriorOption(RATE_HYPERPARAMETER_NAME,  namedOptionsRef, unnamedOptionsRef);
     prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale    <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(rate) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -212,6 +213,7 @@ completeCorrelationPriorFromOptions <- function(regression, callingEnvironment, 
     prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     scale <- getPriorOption(SCALE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale    <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(scale) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -262,6 +264,7 @@ getCorrelationGammaDefaults <- function(regression, callingEnvironment, factorNu
 {
   if (is.null(prior$shape))          prior$shape <- defaultCorrelationGammaShape;
   if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultCorrelationPosteriorScale;
+  if (is.null(prior$commonScale))    prior$commonScale <- defaultCorrelationCommonScale;
   if (is.null(prior$rate))           prior$rate <- defaultCorrelationGammaRate;
   if (is.null(prior$dataScale))      prior$dataScale <- defaultCorrelationDataScale;
 
@@ -272,6 +275,7 @@ getCorrelationInverseGammaDefaults <- function(regression, callingEnvironment, f
 {
   if (is.null(prior$shape))          prior$shape <- defaultCorrelationInverseGammaShape;
   if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultCorrelationPosteriorScale;
+  if (is.null(prior$commonScale))    prior$commonScale <- defaultCorrelationCommonScale;
   if (is.null(prior$scale))          prior$scale <- defaultCorrelationInverseGammaScale;
   if (is.null(prior$dataScale))      prior$dataScale <- defaultCorrelationDataScale;
 
@@ -284,6 +288,9 @@ getCorrelationWishartDefaults <- function(regression, callingEnvironment, factor
     prior$degreesOfFreedom <- defaultCorrelationWishartDegreesOfFreedom;
   if (is.null(prior$scale))
     prior$scale <- defaultCorrelationWishartScale;
+  prior$posteriorScale <- VAR_SCALE_NAME; # no flexibility here
+  prior$commonScale <- COMMON_SCALE_FALSE_NAME; 
+  
   if (is.null(prior$dataScale))
     prior$dataScale <- defaultCorrelationDataScale;
   
@@ -296,6 +303,8 @@ getCorrelationInverseWishartDefaults <- function(regression, callingEnvironment,
     prior$degreesOfFreedom <- defaultCorrelationInverseWishartDegreesOfFreedom;
   if (is.null(prior$inverseScale))
     prior$inverseScale <- defaultCorrelationInverseWishartInverseScale;
+  prior$posteriorScale <- VAR_SCALE_NAME; # no flexibility here
+  prior$commonScale <- COMMON_SCALE_FALSE_NAME; 
   if (is.null(prior$dataScale))
     prior$dataScale <- defaultCorrelationDataScale;
   

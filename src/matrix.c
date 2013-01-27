@@ -401,8 +401,8 @@ double getLogDeterminantOfTriangularMatrix(const double *matrix, int dim, int *s
   for (int i = 0; i < dim; ++i) {
     double diagonalElement = matrix[i * (dim + 1)];
     
-    modulus += log(diagonalElement < 0 ? -diagonalElement : diagonalElement);
-    if (diagonalElement < 0) *sign = -*sign;
+    modulus += log(diagonalElement < 0.0 ? -diagonalElement : diagonalElement);
+    if (diagonalElement < 0.0) *sign = -*sign;
   }
   
   return (modulus);
@@ -431,6 +431,30 @@ double getLogDeterminantOfPositiveDefiniteMatrix(const double *matrix, int dim)
   double result;
   result = 2.0 * getLogDeterminantOfTriangularMatrix(decomposition, dim, &sign);
   return (result);
+}
+
+double getLogDeterminantOfSTMatrix(const double* matrix, int dim, int* signPtr)
+{
+  // the ST decomp implies T * S * S * T' is symmetric and pos-def
+  // As T is unit lower triangular, it has a determinant of 1, and the det
+  // of the product T * S is the product of the elements of S
+  
+  // as it is stored, the elements of S are the first dim components
+  // of the matrix arg
+  int ignored;
+  int* sign = (signPtr != NULL ? signPtr : &ignored);
+  
+  *sign = 1;
+  double modulus = 0.0;
+  
+  for (int i = 0; i < dim; ++i) {
+    double element = matrix[i];
+    
+    modulus += log(element < 0.0 ? -element : element);
+    if (element < 0.0) *sign = -*sign;
+  }
+  
+  return(modulus);
 }
 
 // AX = B, X = A^{-1}B; A: lhs x lhs, B: lhs x rhs; X: lhs x rhs

@@ -13,32 +13,34 @@
 #include "unmodeledCoefficientPrior.h"
 #include "matrix.h"
 
+#include "lmm_objectiveFunction.h"
+#include "lmm_commonScale.h"
+
 #define COMMON_SCALE_LIST_NAME          "sigma"
 #define UNMODELED_COEFFICIENT_LIST_NAME "fixef"
 #define MODELED_COEFFICIENT_LIST_NAME   "ranef"
 
-static
-unsigned int allocateStorage(SEXP* resultPtr, SEXP regression, unsigned int numSims);
+static int allocateStorage(SEXP* resultPtr, SEXP regression, int numSims);
 static int unmodeledCoefficientsDependOnCommonScale(SEXP regression);
 
-static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, MERCache* cache);
-static void sampleUnmodeledCoefficients(SEXP regression, unsigned int numSims, SEXP sims, MERCache* cache);
-static void sampleModeledCoefficients(SEXP regression, unsigned int numSims, SEXP sims);
-static void addMeansToSamples(SEXP regression, unsigned int numSims, SEXP sims);
+static void sampleCommonScale(SEXP regression, int numSims, SEXP sims, MERCache* cache);
+static void sampleUnmodeledCoefficients(SEXP regression, int numSims, SEXP sims, MERCache* cache);
+static void sampleModeledCoefficients(SEXP regression, int numSims, SEXP sims);
+static void addMeansToSamples(SEXP regression, int numSims, SEXP sims);
 
 SEXP bmer_sim(SEXP regression, SEXP numSimsExp)
 {
   GetRNGstate();
   
-  unsigned int numSims = REAL(numSimsExp)[0];
+  int numSims = INTEGER(numSimsExp)[0];
   
   SEXP sims;
-  unsigned int protectCount = allocateStorage(&sims, regression, numSims);
+  int protectCount = allocateStorage(&sims, regression, numSims);
   
   MERCache* cache = NULL;
   if (unmodeledCoefficientsDependOnCommonScale(regression)) {
     cache = createLMMCache(regression);
-    calculateProjections(regression, cache);
+    calculateFirstHalfOfProjections(regression, cache);
   }
   
   int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
@@ -60,7 +62,7 @@ SEXP bmer_sim(SEXP regression, SEXP numSimsExp)
   return(sims);
 }
 
-static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, MERCache* cache)
+static void sampleCommonScale(SEXP regression, int numSims, SEXP sims, MERCache* cache)
 {
   int    *dims      = DIMS_SLOT(regression);
   double *deviances = DEV_SLOT(regression);
@@ -91,8 +93,9 @@ static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, 
       unmodeledCoefficientPriorType == PRIOR_TYPE_DIRECT &&
       PRIOR_FAMILIES_SLOT(unmodeledCoefficientPrior)[0] == PRIOR_FAMILY_GAUSSIAN)
   {
-    priorScale_t priorScale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
-    if (priorScale == PRIOR_SCALE_COMMON) {
+    int priorScale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
+    priorCommonScale_t onCommonScale = getCommonScaleBit(priorScale);
+    if (onCommonScale) {
       // prior on common scale gets extra dof
       degreesOfFreedom += (double) dims[p_POS]; 
     } else {
@@ -105,7 +108,7 @@ static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, 
     case SIM_TYPE_FIXED:
     {
       double commonScale = (dims[isREML_POS] ? deviances[sigmaREML_POS] : deviances[sigmaML_POS]);
-      for (unsigned int i = 0; i < numSims; ++i) commonScaleSamples[i] = commonScale;
+      for (int i = 0; i < numSims; ++i) commonScaleSamples[i] = commonScale;
       break;
     } 
     case SIM_TYPE_APPROX:
@@ -115,7 +118,7 @@ static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, 
       
       // do inv-gamma matching posterior in mode and curvature at mode
       double firstDerivative, secondDerivative;
-      getDerivatives(regression, cache, &firstDerivative, &secondDerivative);
+      getCommonScaleDerivatives(regression, cache, &firstDerivative, &secondDerivative);
       
       // the mess is because the derivatives are of sigma, not sigma.sq, sigma.sq being
       // the scale on which the posterior looks like an inv-gamma.
@@ -130,7 +133,7 @@ static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, 
       // who would have thought that an undocumented function treats its parameters in a fashion
       // opposite that of "default" R?. apparently, rgamma samples propto x^(a - 1) exp(-x/b), despite,
       // in R: rgamma(1, a, b) propto x^(a - 1) exp(-x*b). Thanks R!
-      for (unsigned int i = 0; i < numSims; ++i) commonScaleSamples[i] = sqrt(1.0 / rgamma(shape, scale));
+      for (int i = 0; i < numSims; ++i) commonScaleSamples[i] = sqrt(1.0 / rgamma(shape, scale));
       
       break;
     }
@@ -138,19 +141,17 @@ static void sampleCommonScale(SEXP regression, unsigned int numSims, SEXP sims, 
     {
       double shape = degreesOfFreedom / 2.0;
       double scale = 1.0 / (deviances[pwrss_POS] / 2.0);
-      for (unsigned int i = 0; i < numSims; ++i) commonScaleSamples[i] = sqrt(1.0 / rgamma(shape, scale));
+      for (int i = 0; i < numSims; ++i) commonScaleSamples[i] = sqrt(1.0 / rgamma(shape, scale));
       break;
     }
   }
 }
 
-static void sampleUnmodeledCoefficients(SEXP regression, unsigned int numSims, SEXP sims, MERCache* cache)
+static void sampleUnmodeledCoefficients(SEXP regression, int numSims, SEXP sims, MERCache* cache)
 {
   int    *dims      = DIMS_SLOT(regression);
-  double *deviances = DEV_SLOT(regression);
   
-  unsigned int numUnmodeledCoefs = dims[p_POS];
-  unsigned int numObservations  = dims[n_POS];
+  int numUnmodeledCoefs = dims[p_POS];
   
   double* unmodeledCoefficientSamples = REAL(getListElement(sims, UNMODELED_COEFFICIENT_LIST_NAME));
   double* commonScaleSamples          = REAL(getListElement(sims, COMMON_SCALE_LIST_NAME));
@@ -158,16 +159,16 @@ static void sampleUnmodeledCoefficients(SEXP regression, unsigned int numSims, S
   if (unmodeledCoefficientsDependOnCommonScale(regression)) {
     // we cache X'X - Rzx'Rzx
     // chol factor that we want is X'X - Rzx'Rzx + sigma^2 Sigma.beta^-1
-    unsigned int blockMatrixSize = numUnmodeledCoefs * numUnmodeledCoefs;
+    int blockMatrixSize = numUnmodeledCoefs * numUnmodeledCoefs;
     double* lowerRightBlock     = Alloca(blockMatrixSize, double);
     double* baseLowerRightBlock = Alloca(blockMatrixSize, double); 
     
     computeDowndatedDenseCrossproduct(regression, cache, baseLowerRightBlock);
     
-    unsigned long long offset = 0;
+    long long offset = 0;
     int i_one = 1;
-    for (unsigned int i = 0; i < numSims; ++i) {
-      for (unsigned int j = 0; j < numUnmodeledCoefs; ++j) {
+    for (int i = 0; i < numSims; ++i) {
+      for (int j = 0; j < numUnmodeledCoefs; ++j) {
         unmodeledCoefficientSamples[offset++] = norm_rand() * commonScaleSamples[i];
       }
       
@@ -189,9 +190,9 @@ static void sampleUnmodeledCoefficients(SEXP regression, unsigned int numSims, S
   } else {
     double* lowerRightBlock = RX_SLOT(regression);
     
-    unsigned long long offset = 0;
-    for (unsigned int i = 0; i < numSims; ++i) {
-      for (unsigned int j = 0; j < numUnmodeledCoefs; ++j) {
+    long long offset = 0;
+    for (int i = 0; i < numSims; ++i) {
+      for (int j = 0; j < numUnmodeledCoefs; ++j) {
         unmodeledCoefficientSamples[offset++] = norm_rand() * commonScaleSamples[i];
       }
     }
@@ -203,11 +204,11 @@ static void sampleUnmodeledCoefficients(SEXP regression, unsigned int numSims, S
   }
 }
 
-static void sampleModeledCoefficients(SEXP regression, unsigned int numSims, SEXP sims)
+static void sampleModeledCoefficients(SEXP regression, int numSims, SEXP sims)
 {
   int* dims = DIMS_SLOT(regression);
-  unsigned int numModeledCoefs   = dims[q_POS];
-  unsigned int numUnmodeledCoefs = dims[p_POS];
+  int numModeledCoefs   = dims[q_POS];
+  int numUnmodeledCoefs = dims[p_POS];
   
   double* commonScaleSamples          = REAL(getListElement(sims, COMMON_SCALE_LIST_NAME));
   double* unmodeledCoefficientSamples = REAL(getListElement(sims, UNMODELED_COEFFICIENT_LIST_NAME));
@@ -215,9 +216,9 @@ static void sampleModeledCoefficients(SEXP regression, unsigned int numSims, SEX
   
   double* upperRightFactor = RZX_SLOT(regression);
   
-  unsigned long long offset = 0;
-  for (unsigned int i = 0; i < numSims; ++i) {
-    for (unsigned int j = 0; j < numModeledCoefs; ++j) {
+  long long offset = 0;
+  for (int i = 0; i < numSims; ++i) {
+    for (int j = 0; j < numModeledCoefs; ++j) {
       modeledCoefficientSamples[offset++] = norm_rand() * commonScaleSamples[i];
     }
   }
@@ -249,7 +250,7 @@ static void sampleModeledCoefficients(SEXP regression, unsigned int numSims, SEX
   // we need to scale by their covariance (and reverse the fill-reducing Cholmod permutation)
   
   
-  unsigned int numFactors = dims[nt_POS];
+  int numFactors = dims[nt_POS];
   
   SparseMatrixStructure sparseStructure;
   sparseStructure.factorDimensions = Alloca(numFactors, int);
@@ -264,26 +265,26 @@ static void sampleModeledCoefficients(SEXP regression, unsigned int numSims, SEX
   int* cholmodPerm = PERM_VEC(regression);
   
   double* modeledCoefficientColumn = modeledCoefficientSamples;
-  for (unsigned int i = 0; i < numSims; ++i) {
+  for (int i = 0; i < numSims; ++i) {
     
     // permutation first
     Memcpy(tempColumn, (double* const) modeledCoefficientColumn, numModeledCoefs);
-    for (unsigned int j = 0; j < numModeledCoefs; ++j) {
+    for (int j = 0; j < numModeledCoefs; ++j) {
       modeledCoefficientColumn[cholmodPerm[j]] = tempColumn[j];
     }
     
     
     // now to rotate/rescale by left factor = T*S
-    for (unsigned int j = 0; j < numFactors; ++j) {
-      unsigned int factorDimension = sparseStructure.factorDimensions[j];
-      unsigned int numGroups       = sparseStructure.numGroupsPerFactor[j];
+    for (int j = 0; j < numFactors; ++j) {
+      int factorDimension = sparseStructure.factorDimensions[j];
+      int numGroups       = sparseStructure.numGroupsPerFactor[j];
       
-      for (unsigned int k = 0; k < factorDimension; ++k) {
+      for (int k = 0; k < factorDimension; ++k) {
         
         // multiply by S
         double scale = stMatrices[j][k * (factorDimension + 1)]; // pull scale off of diagonal
-        unsigned int base = sparseRowForFactor[j] + k * numGroups;
-        for (unsigned int l = 0; l < numGroups; ++l) {
+        int base = sparseRowForFactor[j] + k * numGroups;
+        for (int l = 0; l < numGroups; ++l) {
           modeledCoefficientColumn[base + l] *= scale;
         }
         
@@ -322,11 +323,11 @@ static void sampleModeledCoefficients(SEXP regression, unsigned int numSims, SEX
 }
 
 // adds fixef and ranef to the mean 0 sims we have already generated
-static void addMeansToSamples(SEXP regression, unsigned int numSims, SEXP sims)
+static void addMeansToSamples(SEXP regression, int numSims, SEXP sims)
 {
   int* dims = DIMS_SLOT(regression);
-  unsigned int numModeledCoefs   = dims[q_POS];
-  unsigned int numUnmodeledCoefs = dims[p_POS];
+  int numModeledCoefs   = dims[q_POS];
+  int numUnmodeledCoefs = dims[p_POS];
   
   double* unmodeledCoefficientSamples = REAL(getListElement(sims, UNMODELED_COEFFICIENT_LIST_NAME));
   double*   modeledCoefficientSamples = REAL(getListElement(sims,   MODELED_COEFFICIENT_LIST_NAME));
@@ -336,11 +337,11 @@ static void addMeansToSamples(SEXP regression, unsigned int numSims, SEXP sims)
   
   double* unmodeledCoefficientColumn = unmodeledCoefficientSamples;
   double*   modeledCoefficientColumn =   modeledCoefficientSamples;
-  for (unsigned int i = 0; i < numSims; ++i) {
-    for (unsigned int j = 0; j < numUnmodeledCoefs; ++j) {
+  for (int i = 0; i < numSims; ++i) {
+    for (int j = 0; j < numUnmodeledCoefs; ++j) {
       unmodeledCoefficientColumn[j] += unmodeledCoefficients[j];
     }
-    for (unsigned int j = 0; j < numModeledCoefs; ++j) {
+    for (int j = 0; j < numModeledCoefs; ++j) {
       modeledCoefficientColumn[j] += modeledCoefficients[j];
     }
     
@@ -360,13 +361,13 @@ unmodeledCoefficientsDependOnCommonScale(SEXP regression)
   
   return (unmodeledCoefficientPriorType == PRIOR_TYPE_DIRECT &&
           PRIOR_FAMILIES_SLOT(unmodeledCoefficientPrior)[0] == PRIOR_FAMILY_GAUSSIAN &&
-          PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0] == PRIOR_SCALE_ABSOLUTE);
+          getCommonScaleBit(PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0]) == PRIOR_COMMON_SCALE_FALSE);
 }
 
 static
-unsigned int allocateStorage(SEXP* resultPtr, SEXP regression, unsigned int numSims)
+int allocateStorage(SEXP* resultPtr, SEXP regression, int numSims)
 {
-  unsigned int protectCount = 0;
+  int protectCount = 0;
   PROTECT(*resultPtr = allocVector(VECSXP, 3));
   ++protectCount;
   

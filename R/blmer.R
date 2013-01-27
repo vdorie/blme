@@ -14,7 +14,7 @@ blmer <-
   stopifnot(length(formula <- as.formula(formula)) == 3)
   
   fr <- lmerFrames(mc, formula, contrasts) # model frame, X, etc.
-  FL <- lmerFactorList(formula, fr, 0L, 0L) # flist, Zt, dims
+  FL <- lmerFactorList(formula, fr, rmInt=FALSE, drop=FALSE) # flist, Zt, dims
   largs <- list(...)
   if (!is.null(method <- list(...)$method)) {
     warning(paste("Argument", sQuote("method"),
@@ -30,6 +30,7 @@ blmer <-
   ### FIXME: issue a warning if the control argument has an msVerbose component
   cv <- do.call(lmerControl, control)
   if (missing(verbose)) verbose <- cv$msVerbose
+  FL$dims["LMM"] <- 1L
   FL$dims["mxit"] <- cv$maxIter
   FL$dims["mxfn"] <- cv$maxFN
   
@@ -88,7 +89,7 @@ function(formula, data, family = gaussian, start = NULL,
     glmFit <- glm.fit(fr$X, fr$Y, weights = wts, # glm on fixed effects
                       offset = offset, family = family,
                       intercept = attr(attr(fr$mf, "terms"), "intercept") > 0)
-    FL <- lmerFactorList(formula, fr, 0L, 0L) # flist, Zt, dims
+    FL <- lmerFactorList(formula, fr, rmInt=FALSE, drop=FALSE) # flist, Zt, dims
     
 ### FIXME: issue a warning if the control argument has an msVerbose component
     cv <- do.call(lmerControl, control)
@@ -179,8 +180,8 @@ blmer_finalize <- function(fr, FL, start, REML, verbose,
   numObserv <- length(Y);
   if (numGroups >= numObserv) {
     if (numGroups > numObserv ||
-        (ans@var.prior@type == getEnumOrder(typeEnumeration, DIRECT_TYPE_NAME) &&
-         ans@var.prior@families[1] != getEnumOrder(familyEnumeration, POINT_FAMILY_NAME)))
+        (ans@var.prior@type == getEnumOrder(typeEnum, DIRECT_TYPE_NAME) &&
+         ans@var.prior@families[1] != getEnumOrder(familyEnum, POINT_FAMILY_NAME)))
       stop(paste("Number of levels of a grouping factor for the random effects",
                  "must be less than the number of observations", sep = "\n"))
   }
@@ -282,17 +283,25 @@ validateRegressionArgument <- function(regression, regressionName) {
 setPrior <- function(regression, cov.prior = NULL,
                      fixef.prior = NULL, var.prior = NULL, env = parent.frame())
 {
+  covMissing   <- missing(cov.prior);
+  fixefMissing <- missing(fixef.prior);
+  varMissing   <- missing(var.prior);
+  
   validateRegressionArgument(regression, match.call()$regression);
   
-  if (!is.null(cov.prior)) {
+  if (is.na(regression@deviance[["sigmaREML"]])) regression@deviance[["sigmaREML"]] <- 1.0;
+  if (is.na(regression@deviance[["sigmaML"]])) regression@deviance[["sigmaML"]] <- 1.0;
+  
+  if (!covMissing) {
+    if (is.null(cov.prior)) cov.prior <- "none";
     regression@cov.prior <- parseCovariancePriorSpecification(regression, cov.prior, env);
   }
-  if (!is.null(fixef.prior)) {
+  if (!fixefMissing) {
+    if (is.null(fixef.prior)) fixef.prior <- "none";
     regression@fixef.prior <- parseUnmodeledCoefficientPriorSpecification(regression, fixef.prior, env);
-    if (is.na(regression@deviance[["sigmaREML"]])) regression@deviance[["sigmaREML"]] <- 1.0;
-    if (is.na(regression@deviance[["sigmaML"]])) regression@deviance[["sigmaML"]] <- 1.0;
   }
-  if (!is.null(var.prior)) {
+  if (!varMissing) {
+    if (is.null(var.prior)) var.prior <- "none";
     regression@var.prior <- parseCommonScalePriorSpecification(regression, var.prior, env);
   }
   return (regression);
@@ -337,29 +346,36 @@ runOptimizerWithPrior <- function(regression, cov.prior = NULL,
   return(runOptimizer(regression, verbose));
 }
 
-getDeviance <- function(regression)
+getObjectiveFunction <- function(regression)
 {
   validateRegressionArgument(regression, match.call()$regression);
   
-  return (.Call(bmer_get_dev, regression));
+  return (.Call(bmer_getObjectiveFunction, regression));
 }
 
-approximateDeviance <- function(regression)
+getObjectiveFunctionForFixedCommonScale <- function(regression)
 {
   validateRegressionArgument(regression, match.call()$regression);
   
-  return (.Call(bmer_approximate_dev, regression));
+  return (.Call(bmer_getObjectiveFunctionForFixedCommonScale, regression));
 }
 
-getDerivatives <- function(regression)
+getOptimalCommonScale <- function(regression)
+{
+  validateRegressionArgument(regression, match.call()$regression);
+
+  return(.Call(bmer_getOptimalCommonScale, regression));
+}
+
+getCommonScaleDerivatives <- function(regression)
 {
   validateRegressionArgument(regression, match.call()$regression);
   
-  return (.Call(bmer_getDerivatives, regression));
+  return (.Call(bmer_getCommonScaleDerivatives, regression));
 }
 
 getPriorPenalty <- function(regression) {
   validateRegressionArgument(regression, match.call()$regression);
 
-  return(.Call(bmer_calculatePriorPenalty, regression));
+  return(.Call(bmer_getPriorPenalty, regression));
 }

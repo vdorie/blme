@@ -8,21 +8,18 @@
 #include "blmer.h"
 #include "Syms.h"
 
-extern cholmod_common cholmodCommon;
+#include "lmm_objectiveFunction.h"
+#include "lmm_commonScale.h"
+#include "__lmmMerCache.h"
 
-struct _MERCache {
-  double *weightedDenseDesignMatrix;
-  double *weightedResponse;
-  
-  // there are more fields in lmm's definition, but so long as the first two are
-  // the same we're safe
-};
+extern cholmod_common cholmodCommon;
 
 static int rotateSparseDesignMatrix_test(SEXP regression);
 static int updateWeights_test(SEXP regression, MERCache *cache);
-static int updateAugmentedDesignMatrixFactorizations_test(SEXP regression, MERCache *cache);
-static int calculateJointMode_test(SEXP regression, MERCache *cache);
-static int calculateDevianceAndCommonScale_test(SEXP regression);
+static int updateMatrixFactorizations_test(SEXP regression, MERCache *cache);
+static int calculateHalfProjections_test(SEXP regression, MERCache *cache);
+static int calculateObjectiveFunctionAndCommonScale_test(SEXP regression, MERCache* cache);
+static int finalizeOptimization_test(SEXP regression, MERCache* cache);
 static int newtonsMethodUpdateCommonScale_test(SEXP regression, MERCache *cache);
 
 #define TEST_TOLERANCE 1.0e-10
@@ -31,6 +28,7 @@ SEXP bmer_lmmTest()
 {
   SEXP regression = createTestRegression();
   MERCache *cache = createLMMCache(regression);
+  
   
   char *errorMessage = NULL;
   
@@ -43,19 +41,24 @@ SEXP bmer_lmmTest()
     errorMessage = "updateWeights_test() failed.";
     goto BLME_LMMTEST_CLEANUP;
   }
-  
-  if (!updateAugmentedDesignMatrixFactorizations_test(regression, cache)) {
+
+  if (!updateMatrixFactorizations_test(regression, cache)) {
     errorMessage = "updateAugmentedDesignMatrixFactorizations_test() failed.";
     goto BLME_LMMTEST_CLEANUP;
   }
   
-  if (!calculateJointMode_test(regression, cache)) {
-    errorMessage = "calculateJointMode_test() failed.";
+  if (!calculateHalfProjections_test(regression, cache)) {
+    errorMessage = "calculateHalfProjections_test() failed.";
     goto BLME_LMMTEST_CLEANUP;
   }
   
-  if (!calculateDevianceAndCommonScale_test(regression)) {
-    errorMessage = "calculateDevianceAndCommonScale_test() failed.";
+  if (!calculateObjectiveFunctionAndCommonScale_test(regression, cache)) {
+    errorMessage = "calculateObjectiveFunctionAndCommonScale_test() failed.";
+    goto BLME_LMMTEST_CLEANUP;
+  }
+  
+  if (!finalizeOptimization_test(regression, cache)) {
+    errorMessage = "finalizeOptimization_test() failed.";
     goto BLME_LMMTEST_CLEANUP;
   }
   
@@ -92,7 +95,7 @@ static int rotateSparseDesignMatrix_test(SEXP regression)
 
 static int updateWeights_test(SEXP regression, MERCache *cache)
 {
-  updateWeights(regression, cache);
+  weightMatrices(regression, cache);
   
   double correctWeightedDenseDesignMatrix[] = { 0.0617565919738862, 0.050305918460172, 0.163964053735133, 0.161398546528127, 0.187806415235078, 0.108462035453558, 0.190717802468573, 0.0887467314199873, 0.175776717708043, 0.0935899702679429, 0.0346309094742158, 0.183339966218362, 0.163446001832697, 0.191662724575518, 0.162338416786167, 0.181317479326481, 0.118791602574563, 0.123691700131753, 0.148781716711936, 0.0609121886318083, 0.086926857003468, 0.151428673982027, 0.171183001019172, 0.183892613727555, 0.120405726350736, 0.17648911369551, 0.0476851130967194, 0.155916032874993, 0.117926340296253, 0.151410845937035, 0.188762997933986, 0.088186772491143, 0.119965764772369, 0.161803644951267, 0.17306785692037, 0.142703112760805, 0.179692429388008, 0.143363923942244, 0.139875199072492, 0.127969298594458, 0.118857906613404, 0.0693750623192124, 0.107825316763508, 0.103867832141938, 0.175674341952008, 0.174194859439429, 0.074878161760803, 0.141781735796163, 0.152605279559404, 0.140443880763893, 0.0311011120560344, 0.054620624998654, -0.113291592500548, -0.207332468585943, 0.00877547489635141, -0.0255652128811771, -0.103538454981554, -0.0384548743648465, -0.114161994318279, 0.0680165808400096, 0.039891751678079, 0.181902647884031, -0.0702022004811772, 0.237336737822596, -0.0453486331313244, 0.318738557144711, 0.0666119267740137, -0.0560056193575091, -0.123792829975069, -0.0710583652163356, -0.0926284400056561, -0.236801442390576, 0.197979473961869, 0.153007321217683, -0.0273716762113599, 0.0469703470827712, -0.017963111739502, 0.380647887738575, -0.0937914313923782, -0.00830904471755749, 0.0472174260091231, 0.0545208806739015, -0.0207089105125953, -0.35983517034293, -0.21869103358061, 0.051191730092359, -0.00198478885924802, -0.13485515500599, -0.0162010899943395, -0.104290974050514, 0.0287949301838588, -0.0988662899455768, 0.0394577175095761, 0.025802083315033, 0.0114694583524051, 0.00333694495262804, 0.0192690246319145, -0.0920177753667705, -0.0181857823035529, 0.0932737950469733, 0.0679920996200563, 0.00723255638791365, -0.0193073572971873, -0.147206508759744, -0.269987918481551, -0.0864539523280149, 0.2391759741751, 0.0685250951816365, -0.0385857363563435, -0.0397579817907967, -0.0145096618945798, 0.182787537399227, -0.0450748162477392, 0.240731988643007, 0.104980096729174, 0.235588031558688, -0.103736205721768, 0.00103541827364425, -0.131057607188515, 0.036319441693205, 0.010406678285168, -0.042729216075306, 0.249240463943642, 0.0421150111276617, 0.119989595556771, 0.137989634524794, -0.0370406810597324, -0.0960427027008518, 0.00549304463968454, -0.171152666821713, 0.108863166235617, -0.112945158759277, 0.194998028857357, -0.0810145342479297, 0.290459301032207, -0.0588678720194753, -0.174712583533973, 0.00363898749829418, 0.00384311819681759, -0.215011804495534, 0.12524662167165, -0.0776722576522294, 0.0361880319761723, 0.0513933636830509, 0.0242523187576267, -0.020692960233068, 0.0148022341734934, -0.151521107634412, -0.122574577581754, -0.156421498004242 };
   double correctWeightedResponse[] = { 0.633355044798475, 0.290343719516855, 0.858990677395523, -0.163090186894286, -0.452039442289309, 0.528925460706199, 2.11084082394415, 0.883239513316936, -0.21284653040441, 0.543288147830654, 0.0237173449700773, 2.0222049869005, 0.933781576699828, 3.20950971225159, 1.21317853868475, 1.54318167250863, 0.335435364133565, 0.537362440990296, -0.441119732974195, 0.358520942317532, 0.0848589597271782, 0.852466104265874, 2.3305139466043, 1.11787315881698, 1.15308833509839, 1.51168208391213, 0.0966213531504031, 0.831877459482254, 0.647813909115186, 0.054066783192161, 1.11449826170049, -0.00069306986109797, 1.50517224749665, -1.07790795679175, 2.06862365357347, 0.214310130080279, 0.208350426331088, 0.713146721059777, 0.827569431541108, 0.0335679788488684, 1.2595235873108, -0.0195392586745118, 0.796623050785554, 0.822408826599177, 1.09639550917565, 0.847204295830954, 0.377745709139824, 0.466148269197546, 0.207976197876662, -0.15157352412998 };
@@ -105,6 +108,7 @@ static int updateWeights_test(SEXP regression, MERCache *cache)
   int numObservations  = dims[n_POS];
   int numUnmodeledCoef = dims[p_POS];
   
+  
   int *indicesForColumn = (int *) rotatedSparseDesignMatrix->p;
   int arrayLength = indicesForColumn[rotatedSparseDesignMatrix->ncol];
   
@@ -115,16 +119,15 @@ static int updateWeights_test(SEXP regression, MERCache *cache)
           allApproximatelyEqual(correctWeightedSparseDesignMatrix, Cx_SLOT(regression), arrayLength, TEST_TOLERANCE));
 }
 
-static int updateAugmentedDesignMatrixFactorizations_test(SEXP regression, MERCache *cache)
+static int updateMatrixFactorizations_test(SEXP regression, MERCache *cache)
 {
-  updateAugmentedDesignMatrixFactorizations(regression, cache);
+  updateMatrixFactorizations(regression, cache);
     
   double correctUpperLeftBlockLeftFactorizationValues[] =  { 1.11802518358661, -0.0002141773623994, -0.0103743890251717, 0.112175775126362, 0.000611701259321441, 1.00000009175111, 8.88853631700365e-06, -9.61096069059544e-05, -5.24091476176882e-07, 1.0002152496435, -0.00465438444975504, -2.53806387883136e-05, 1.49434440463776, -0.123695697626689, 0.121341873876496, 0.148610154626757, 0.0078624508320961, 0.087458489693987, 0.0165136442005272, 0.00886709678487256, -0.00708371837023432, -0.0360332718425236, -0.00153527331140769, 1.09301874426808, 0.111363295427212, 0.0546859834083894, -0.013763379390397, -0.0266724406983469, -0.00569893210222258, 0.00326293925792616, 0.0165955387202434, 0.0129333279583555, 0.000529829652003012, 1.08077643694642, 0.0238682472051938, -0.0118054663036574, 0.0125724898921121, -0.0113752346175748, 0.00142414264075875, 0.0145482539127655, -0.00554113019414657, 0.00105755543157494, 1.23367632664908, -0.13583688787858, 0.0710446258321875, 0.0385047413012036, 0.0252987951220653, -0.0510040619523389, 0.0744825871948285, 0.00409653388938489, -0.0014601068911009, -0.0454456018791, 0.00747082731502876, 1.13044686273235, -0.0372359511057397, 0.0163313918520155, 0.0104593890839883, 0.0573729017009881, 0.0300765701554647, 0.00173750291319356, 0.00311420663570389, 0.0502741330732691, 0.00301677036636861, 1.07625611421307, -0.0266905376762697, -0.000191383355038739, -0.00976708831276642, -0.0332918639629976, -0.00283961632832281, -0.000776047624604908, -0.00935127824113051, -0.00333927399718807, 1.59534784551812, -0.000720876059067456, -8.39944148761228e-05, -0.00694047026945949, -0.00383530110414246, 0.143131589001976, -9.62261563715187e-06, -0.000126663407066425, 0.00342190535741926, 0.360695294466859, 0.827250780468855, 0.131069246131821, 0.49310960802699, 0.0196852330476487, 0.0460918459924945, -0.000158032241698, 1.42522678448117, -4.24841600220265e-08, 0.00047949094306412, -0.00154925417665444, -1.34532344485164e-05, 0.0904101361316766, -6.4066027040981e-08, 0.00043821751731743, 1.05783039923595, 0.024095424282278, 0.407352153258517, 0.0113583238234561, 0.09014155656101, 0.000915440803418372, -0.00015528020537116, 1.16300818037506, -0.000779788006279697, -0.000294827194407741, 3.46246910567927e-06, 2.60767961239353e-09, 0.035580136356755, 0.000340657914623858, 0.422148558111065, 0.104615889173929, 0.18816562262877, 0.0141027699572739, 0.100360341148512, 0.0299722279036318, 2.737290464835e-05, 1.06397886488814, 0.000252651807293217, 0.000346390181292402, -0.000285851358630697, 0.00085164562736037, 0.00298181511540217, 0.0655879378354727, 0.06963437478599, 0.003878723396168, -0.00130787280125672, 0.0282223189065852, 0.00101762559477755, 0.000290846095002738, 1.35667137265052, -1.08369230349968e-05, 9.53476369812865e-05, 0.000285134331639584, 0.00160715131865885, 0.199375447091868, 0.557840686518341, 0.180806106149443, 0.229309472089971, -0.00164251803524425, 0.065780176185776, 0.0925383269703125, 1.01269147097472, 1.04712558367651e-06, 5.58651873536069e-06, -0.000131657405732353, -0.0264918575883484, 0.0841938308571651, 0.0459847264940497, 0.0667031802307761, 0.00486742863842052, -0.000585910182466902, -1.1287336786312e-05, 1.00811528346643, 2.18955046204251e-07, -0.000266897685110801, 0.0596112872664278, 0.00259317337077249, 0.0717214881817756, 0.00120632337311161, 0.0182764330089838, 9.24888394263492e-05, 4.1851840582522e-06, 1.00524340978596, -0.000401848376530717, 0.0407984856486992, -0.0024250103296907, 0.0365469016387285, 0.00132368240887922, 0.0149017355301842, -0.000630515549440507, -6.23543360801079e-05, 1.00695691055514, -0.00647668969213502, -0.00656502771749949, -0.00114837857450217, -0.00185289083592358, -0.00205251022275534, -0.000303890613354346, -4.83688587803921e-05, 2.19897401883313, -0.219053251398891, 0.236900625398117, -0.109066628100277, 0.174963144946136, -0.019747937378472, -0.0139369160768567, 1.86407758047341, -0.10253937213632, 0.480741167686214, 0.0042309486404125, 0.202900543430143, 0.0218884451090307, 1.52395681112607, -0.0271917022382678, 0.222887788935849, 0.0010337032539652, 0.0768924732035062, 1.17771557958903, 0.00934560258189148, 0.0670464877218782, 0.0203583362535387, 1.13745698088229, -0.00190679940750244, 0.00795164241849972, 1.10782901791163, 0.0112810581896278, 1.01169419110975 };
   double correctOffDiagonalBlockRightFactorization[] = { 0.0778998552371798, -6.67427923403457e-05, -0.00323221189642478, 0.282094028232767, -0.0845973344211915, -0.0218540538816995, 0.15805724104276, -0.0771677797707074, -0.00524129035496305, 0.280796442467815, 0.265517238995151, 0.116419460580719, 0.0736995024652554, 0.180458757145431, -0.00520224769456156, 0.00123558969071976, -0.00496400170240543, -0.0306645913999253, 0.451093951549468, 0.294066336255723, -0.214557305201791, -0.0192916527673542, -0.0556401109157742, -0.0196347365805808, -0.0170345510007762, 0.00149228013720205, -1.27855107057198e-06, -6.19175170169094e-05, -0.0872999568298233, 0.0812900319724784, 0.0280276365255666, -0.0862099159522169, 0.141842223087893, -0.0397799451354936, 0.356807608361328, 0.221217953078642, 0.0877060589516823, 0.0102091698539887, 0.230575038171117, 0.0612025737515461, 0.0387981580781825, 0.0243979388918357, 0.0317834542361428, 0.0404633812358011, 0.162623947906501, 0.426307070243975, 0.155318364187866, 0.0365013938425808, -0.000862573903665115, 0.0350199633885392, -0.00925388161150203, 7.92851150824531e-06, 0.000383960998922727, 0.108236093002336, 0.099335271624161, 0.138718906206799, 0.0633713036005644, -0.0332142049414317, 0.131220404904977, 0.0571546314737265, 0.0811101370724144, 0.107877898359283, 0.0243089636684658, 0.0299462991079491, 0.00287067844345891, 0.0157590558092529, 0.0249798293855021, -0.0143013323453459, 0.142629286613056, 0.194638060595372, 0.20394073838379, 0.0706578970098602, 0.227790047872929, 0.181674915802529, 0.0152590558588238 };
   double correctLowerRightBlockRightFactorization[] = { 0.577681597641182, 0, 0, -0.258693382460513, 0.506237479635821, 0, -0.142287523232981, -0.0305303008294976, 0.72482670034976 };
   
   int *dims = DIMS_SLOT(regression);
-//  int numObservations  = dims[n_POS];
   int numUnmodeledCoef = dims[p_POS];
   int numModeledCoef   = dims[q_POS];
 
@@ -146,82 +149,106 @@ static int updateAugmentedDesignMatrixFactorizations_test(SEXP regression, MERCa
                                numUnmodeledCoef * numUnmodeledCoef, TEST_TOLERANCE));
 }
 
-//extern void calculateProjections(SEXP regression, MERCache *cache);
-// extern void calculatePenalizedWeightedResidualSumOfSquaresFromProjections(SEXP regression, MERCache *cache);
-// extern void rotateProjections(SEXP regression, MERCache *cache);
-
-static int calculateJointMode_test(SEXP regression, MERCache *cache)
+static int calculateHalfProjections_test(SEXP regression, MERCache *cache)
 {
-  calculateProjections(regression, cache);
-  calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
-  rotateProjections(regression, cache);
+  calculateFirstHalfOfProjections(regression, cache);
   
-  double correctModeledCoef[] = { -0.00231964142163336, 2.22198029460337e-06, 0.000107628965658346, 0.193723335728012, -0.265183671406125, -0.204410889696908, 0.008554735301422, 0.00155769498291329, 0.0367447612383233, -0.155334369948256, -0.377100041255745, 0.0767531433276913, 0.0563610252081127, 0.399320242668198, -0.0790506013889741, -0.0807488005279119, -0.0371839245659116, -0.0161373444482706, -0.272197559355291, 0.0722391297474915, 0.129524138500678, 0.13409961594224, 0.0120207928952145, 0.155537706597713, 0.213120670931068 };
-  double correctUnmodeledCoef[] = { 5.33671607754357, 1.33018552831726, 4.59947659629086 };
+  double correctModeledCoefProj[] = { 0.378869343297106, -0.000324606481319019, -0.015720003520765, 2.17350725450721, -0.213366264342808, 0.328978802035466, 1.04672506906306, -0.367315809178671, 0.552305874417435, 2.02725249191711, 1.30824372120037, 1.24670565523127, 0.566749633701879, 2.01933585970544, 0.0149585244660767, 0.0429340349081508, 0.0771826029578557, -0.202589356109016, 2.51494459473368, 2.90302142004754, 0.573026967967716, 0.60144809816095, 0.814404360386651, 0.904390537093726, 0.241471101392587 };
+  double correctUnmodeledCoefProj[] = { 2.08436434315804, 0.532966365160381, 3.33382344462545 };
   
-  double *modeledCoef   = U_SLOT(regression);
-  double *unmodeledCoef = FIXEF_SLOT(regression);
-  
-  int *dims = DIMS_SLOT(regression);
+  const int* dims = DIMS_SLOT(regression);
   int numUnmodeledCoef = dims[p_POS];
   int numModeledCoef   = dims[q_POS];
-  
-  return(allApproximatelyEqual(modeledCoef, correctModeledCoef, numModeledCoef, TEST_TOLERANCE) &&
-         allApproximatelyEqual(unmodeledCoef, correctUnmodeledCoef, numUnmodeledCoef, TEST_TOLERANCE));
+    
+  return(allApproximatelyEqual(cache->modeledCoefProjection, correctModeledCoefProj, numModeledCoef, TEST_TOLERANCE) &&
+         allApproximatelyEqual(cache->unmodeledCoefProjection, correctUnmodeledCoefProj, numUnmodeledCoef, TEST_TOLERANCE));
 }
 
-static int calculateDevianceAndCommonScale_test(SEXP regression)
+extern void calculateObjectiveFunction(SEXP regression, MERCache* cache, const double* parameters);
+extern void setPriorVaryingContributionsToCommonScale(SEXP regression, MERCache* cache, const double* parameters);
+static int calculateObjectiveFunctionAndCommonScale_test(SEXP regression, MERCache* cache)
 {
-  MERCache *cache = createLMMCache(regression);
+  int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
+  double parameters[numParameters];
   
-  updateDeviance(regression, cache);
-  profileCommonScale(regression, cache);
+  copyParametersFromRegression(regression, parameters);
+  
+  setPriorVaryingContributionsToCommonScale(regression, cache, parameters);
+  optimizeCommonScale(regression, cache);
+  calculateObjectiveFunction(regression, cache, parameters);
+  
+  double correctCommonScale = 0.271100809324824;
+  double correctObjectiveFunction = 20.7613927676771;
+  
+  const double* deviances = DEV_SLOT(regression);
+  return(fabs(cache->objectiveFunctionValue - correctObjectiveFunction) <= TEST_TOLERANCE &&
+         fabs(deviances[sigmaML_POS] - correctCommonScale) <= TEST_TOLERANCE);
+}
+
+extern void calculateDeviances(SEXP regression, MERCache* cache);
+static int finalizeOptimization_test(SEXP regression, MERCache* cache)
+{
+  calculateSecondHalfOfProjections(regression, cache);
+  calculateSumsOfSquares(regression, cache);
+  calculateDeviances(regression, cache);
+  
+  double correctModeledCoef[] = { -0.00231964142163336, 2.22198029460331e-06, 0.000107628965658345, 0.193723335728012, -0.265183671406125, -0.204410889696909, 0.00855473530142201, 0.00155769498291333, 0.0367447612383232, -0.155334369948256, -0.377100041255745, 0.0767531433276914, 0.0563610252081127, 0.399320242668198, -0.0790506013889741, -0.0807488005279119, -0.0371839245659116, -0.0161373444482706, -0.272197559355291, 0.0722391297474915, 0.129524138500678, 0.13409961594224, 0.0120207928952143, 0.155537706597713, 0.213120670931068 };
+  double correctUnmodeledCoef[] = { 5.33671607754357, 1.33018552831726, 4.59947659629086 };
   
   double correctWeightedResidualSumOfSquares = 2.9906203297744;
   double correctPenaltySumOfSquares = 0.684162111054328;
-  double correctDeviance = 20.7613927676771;
-  double correctCommonScale = 0.271100809324824;
-
-  double *deviances = DEV_SLOT(regression);
   
-  return(fabs(deviances[wrss_POS] - correctWeightedResidualSumOfSquares) <= TEST_TOLERANCE &&
-         fabs(deviances[usqr_POS] - correctPenaltySumOfSquares) <= TEST_TOLERANCE &&
-         fabs(deviances[ML_POS] - correctDeviance) <= TEST_TOLERANCE &&
-         fabs(deviances[sigmaML_POS] - correctCommonScale) <= TEST_TOLERANCE);
+  const int*    dims      = DIMS_SLOT(regression);
+  const double* deviances = DEV_SLOT(regression);
+  int numUnmodeledCoef = dims[p_POS];
+  int numModeledCoef   = dims[q_POS];
+  
+  const double* unmodeledCoef = FIXEF_SLOT(regression);
+  const double*   modeledCoef = U_SLOT(regression);
+  
+  return(allApproximatelyEqual(modeledCoef, correctModeledCoef, numModeledCoef, TEST_TOLERANCE) &&
+         allApproximatelyEqual(unmodeledCoef, correctUnmodeledCoef, numUnmodeledCoef, TEST_TOLERANCE) &&
+         fabs(deviances[wrss_POS] - correctWeightedResidualSumOfSquares) <= TEST_TOLERANCE &&
+         fabs(deviances[usqr_POS] - correctPenaltySumOfSquares) <= TEST_TOLERANCE);
 }
 
 static int newtonsMethodUpdateCommonScale_test(SEXP regression, MERCache *cache)
 {
   double priorModeledCoefSD = 1.5;
-  int *dims = DIMS_SLOT(regression);
+  int* dims = DIMS_SLOT(regression);
   int numUnmodeledCoefs = dims[p_POS];
   
   SEXP unmodeledCoefPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
   SET_SLOT(unmodeledCoefPrior, blme_prior_typeSym, ScalarInteger(PRIOR_TYPE_DIRECT));
   SET_SLOT(unmodeledCoefPrior, blme_prior_familiesSym, ScalarInteger(PRIOR_FAMILY_GAUSSIAN));
-  SET_SLOT(unmodeledCoefPrior, blme_prior_scalesSym, ScalarInteger(PRIOR_SCALE_ABSOLUTE));
+  SET_SLOT(unmodeledCoefPrior, blme_prior_scalesSym, ScalarInteger((PRIOR_SCALE_POSTERIOR_MASK * PRIOR_POSTERIOR_SCALE_VAR) | (PRIOR_SCALE_COMMON_MASK * PRIOR_COMMON_SCALE_FALSE)));
   double *hyperparameters = REAL(ALLOC_SLOT(unmodeledCoefPrior, blme_prior_hyperparametersSym, REALSXP, 2));
   hyperparameters[0] = 2.0 * ((double) numUnmodeledCoefs) * log(priorModeledCoefSD);
   hyperparameters[1] = 1.0 / priorModeledCoefSD;
+  cache->commonScaleOptimization = CSOT_BRUTE_FORCE;
+  
+  int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
+  double parameters[numParameters];
+  
+  copyParametersFromRegression(regression, parameters);
+  
   
   // now that we have set a prior, call a few updates to fill in the cache
-  updateAugmentedDesignMatrixFactorizations(regression, cache);
-  calculateProjections(regression, cache);
-  calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
+  updateMatrixFactorizations(regression, cache);
+  setPriorVaryingContributionsToCommonScale(regression, cache, parameters);
+  calculateFirstHalfOfProjections(regression, cache);
   
   // perform the update
   double commonScale = performOneStepOfNewtonsMethodForCommonScale(regression, cache);
   
   double correctCommonScale = 0.277388800783761;
   double correctLowerRightBlockRightFactorization[] = { 0.606558822051857, 0, 0, -0.246377434547006, 0.544696601805623, 0, -0.135513458476428, -0.0220934004058438, 0.749597988699522 };
-  double correctPenalizedWeightedResidualSumOfSquares = 5.2206764279238;
   
   
   
   int arrayLength = numUnmodeledCoefs * numUnmodeledCoefs;
   
   int firstTestSuiteResult = fabs(commonScale - correctCommonScale) <= TEST_TOLERANCE &&
-    fabs(correctPenalizedWeightedResidualSumOfSquares - DEV_SLOT(regression)[pwrss_POS]) <= TEST_TOLERANCE &&
     allApproximatelyEqual(RX_SLOT(regression), correctLowerRightBlockRightFactorization, arrayLength, TEST_TOLERANCE);
   
   if (!firstTestSuiteResult) return(FALSE);
@@ -231,17 +258,15 @@ static int newtonsMethodUpdateCommonScale_test(SEXP regression, MERCache *cache)
   hyperparameters[0] = log(1.5) + log(2.0);
   Memcpy(hyperparameters + 1, diagonalPriorSds, numUnmodeledCoefs);
   
-  updateAugmentedDesignMatrixFactorizations(regression, cache);
-  calculateProjections(regression, cache);
-  calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
+  updateMatrixFactorizations(regression, cache);
+  setPriorVaryingContributionsToCommonScale(regression, cache, parameters);
+  calculateFirstHalfOfProjections(regression, cache);
   
   commonScale = performOneStepOfNewtonsMethodForCommonScale(regression, cache);
   
   double correctCommonScale2 = 0.287957767760753;
   double correctLowerRightBlockRightFactorization2[] = { 0.645473240550702, 0, 0, -0.231523783002205, 0.553577979295315, 0, -0.127343596266682, -0.0146859400666481, 0.742192316542082 };
-  double correctPenalizedWeightedResidualSumOfSquares2 = 5.86501307958162;
   
   return (fabs(commonScale - correctCommonScale2) <= TEST_TOLERANCE &&
-          fabs(correctPenalizedWeightedResidualSumOfSquares2 - DEV_SLOT(regression)[pwrss_POS]) <= TEST_TOLERANCE &&
           allApproximatelyEqual(RX_SLOT(regression), correctLowerRightBlockRightFactorization2, arrayLength, TEST_TOLERANCE));
 }

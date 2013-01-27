@@ -4,20 +4,18 @@
 #include <R.h>
 #include <Rdefines.h>
 
-#include "lmm.h" // for MERCache
+// expects commonScale as a variance; returns only the non-constant part
+double getUnmodeledCoefficientDevianceVaryingPart(SEXP prior, double commonScale,
+                                                  const double *unmodeledCoefficients, int numUnmodeledCoefs);
+double getUnmodeledCoefficientDevianceConstantPart(SEXP prior, int numUnmodeledCoefs);
 
-double
-calculateUnmodeledCoefficientDeviance(SEXP prior, double commonScale,
-                                      const double *unmodeledCoefficients, int numUnmodeledCoefs);
+double getUnmodeledCoefficientDensityExponentialPart(SEXP prior, const double* unmodeledCoefficients, int numUnmodeledCoefs);
+
+
+// common scale has form (sigma^2)^-(df/2) * exp(-0.5 * sigma^-2 * stuff) in the objective function
+// adjustment to power of common scale due to prior in terms of "degrees of freedom"
+double getUnmodeledCoefficientPriorCommonScaleDegreesOfFreedom(SEXP prior, int numUnmodeledCoefs);
 
 void addGaussianContributionToDenseBlock(SEXP regression, double *lowerRightBlock, double commonScale);
-
-
-// derivatives of objective function w/r/t common scale
-void getDerivatives(SEXP regression, MERCache* cache,
-                    double* firstDerivative, double* secondDerivative);
-
-// externally callable version of above
-SEXP bmer_getDerivatives(SEXP regression);
 
 #endif // BLME_UNMODELED_COEFFICIENT_PRIOR_H

@@ -8,30 +8,34 @@
 #include "blmer.h"
 #include "lmer_common.h"
 #include "matrix.h"
-#include "multivariateNormal.h"
 
 #include "common_inlines.h"
 
 #include "__lmmMerCache.h" // defines MERCache
 
-double calculateGaussianDeviance(SEXP prior, double commonScale,
+double getGaussianDevianceVaryingPart(SEXP prior, double commonScale,
+                                      const double *unmodeledCoefficients, int numUnmodeledCoefs);
+
+double getMVTDevianceVaryingPart(SEXP prior, double commonScale,
                                  const double *unmodeledCoefficients, int numUnmodeledCoefs);
-double calculateMVTDeviance(SEXP prior, double commonScale,
-                            const double *unmodeledCoefficients, int numUnmodeledCoefs);
-double calculateUnmodeledCoefficientDeviance(SEXP prior, double commonScale,
-                                             const double *unmodeledCoefficients, int numUnmodeledCoefs)
+
+double getGaussianDevianceConstantPart(SEXP prior, int numUnmodeledCoefs);
+double getMVTDevianceConstantPart(SEXP prior, int numUnmodeledCoefs);
+
+double getUnmodeledCoefficientDevianceVaryingPart(SEXP prior, double commonScale,
+                                                  const double *unmodeledCoefficients, int numUnmodeledCoefs)
 {
   priorType_t priorType = PRIOR_TYPE_SLOT(prior);
   
-  if (priorType == PRIOR_TYPE_NONE) return(0.0);
+  if (priorType != PRIOR_TYPE_DIRECT) return(0.0);
   
   priorFamily_t priorFamily = PRIOR_FAMILIES_SLOT(prior)[0];
   switch (priorFamily) {
     case PRIOR_FAMILY_GAUSSIAN:
-      return(calculateGaussianDeviance(prior, commonScale, unmodeledCoefficients, numUnmodeledCoefs));
+      return(getGaussianDevianceVaryingPart(prior, commonScale, unmodeledCoefficients, numUnmodeledCoefs));
       break;
     case PRIOR_FAMILY_MVT:
-      return(calculateMVTDeviance(prior, commonScale, unmodeledCoefficients, numUnmodeledCoefs));
+      return(getMVTDevianceVaryingPart(prior, commonScale, unmodeledCoefficients, numUnmodeledCoefs));
       break;
     default:
       break;
@@ -39,38 +43,121 @@ double calculateUnmodeledCoefficientDeviance(SEXP prior, double commonScale,
   return(0.0);
 }
 
-double calculateGaussianDeviance(SEXP prior, double commonScale,
-                                 const double *parameters, int numParameters)
+double getUnmodeledCoefficientDevianceConstantPart(SEXP prior, int numUnmodeledCoefs)
+{
+  priorType_t priorType = PRIOR_TYPE_SLOT(prior);
+  
+  if (priorType != PRIOR_TYPE_DIRECT) return(0.0);
+  
+  priorFamily_t priorFamily = PRIOR_FAMILIES_SLOT(prior)[0];
+  switch (priorFamily) {
+    case PRIOR_FAMILY_GAUSSIAN:
+      return(getGaussianDevianceConstantPart(prior, numUnmodeledCoefs));
+      break;
+    case PRIOR_FAMILY_MVT:
+      return(getMVTDevianceConstantPart(prior, numUnmodeledCoefs));
+      break;
+    default:
+      break;
+  }
+  return(0.0);
+}
+
+double getUnmodeledCoefficientDensityExponentialPart(SEXP prior, const double* unmodeledCoefficients, int numUnmodeledCoefs)
+{
+  if (PRIOR_TYPE_SLOT(prior) != PRIOR_TYPE_DIRECT ||
+      PRIOR_FAMILIES_SLOT(prior)[0] != PRIOR_FAMILY_GAUSSIAN) return(0.0);
+  
+  const double* hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(prior) + 1;
+  int numHyperparameters  = LENGTH(GET_SLOT(prior, blme_prior_hyperparametersSym)) - 1; // pop off one for the log determinant of the covariance
+  
+  if (numHyperparameters == 1) {
+    double varInverse = hyperparameters[0] * hyperparameters[0];
+    
+    return(getSumOfSquares(unmodeledCoefficients, numUnmodeledCoefs) * varInverse);
+  } else if (numHyperparameters == numUnmodeledCoefs) {
+    const double* sdsInverse = hyperparameters;
+    
+    double result = 0.0;
+    for (int i = 0; i < numUnmodeledCoefs; ++i) {
+      result += unmodeledCoefficients[i] * unmodeledCoefficients[i] * sdsInverse[i] * sdsInverse[i];
+    }
+    
+    return(result);
+  } else if (numHyperparameters == 2 * numUnmodeledCoefs * numUnmodeledCoefs) {
+    int covLength = numUnmodeledCoefs * numUnmodeledCoefs;
+    // hyperparameters contains: ( logDetCov, leftFactor, covInv ). skip left factor
+    const double* covInverse = hyperparameters + covLength;
+
+    double tempVector[numUnmodeledCoefs];
+    
+    applyMatrixToVector(covInverse, numUnmodeledCoefs, numUnmodeledCoefs, TRUE, unmodeledCoefficients, tempVector);
+    
+    double result = 0.0;
+    for (int i = 0; i < numUnmodeledCoefs; ++i) {
+      result += unmodeledCoefficients[i] * tempVector[i];
+    }
+    
+    return(result);
+  }
+  
+  return(0.0);
+}
+  
+
+double getGaussianDevianceVaryingPart(SEXP prior, double commonScale,
+                                      const double *parameters, int numParameters)
 {  
-  priorScale_t scale  = PRIOR_SCALES_SLOT(prior)[0];
+  priorCommonScale_t useCommonScale = getCommonScaleBit(PRIOR_SCALES_SLOT(prior)[0]);
   
-  double *hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(prior);
-  int numHyperparameters = LENGTH(GET_SLOT(prior, blme_prior_hyperparametersSym)) - 1;
   
-  double logDetCov = *hyperparameters++;
-  if (scale == PRIOR_SCALE_COMMON) logDetCov += ((double) numParameters) * log(commonScale);
+  double* hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(prior) + 1;
+  int numHyperparameters  = LENGTH(GET_SLOT(prior, blme_prior_hyperparametersSym)) - 1; // pop off one for the log determinant of the covariance
   
   double result = 0.0;
+  if (useCommonScale) result = ((double) numParameters) * log(commonScale);
+  
   if (numHyperparameters == 1) {
-    double sdInverse = hyperparameters[0];
-    if (scale == PRIOR_SCALE_COMMON) sdInverse /= sqrt(commonScale);
+    double varInverse = hyperparameters[0] * hyperparameters[0];
+    if (useCommonScale) varInverse /= commonScale;
     
-    result = -2.0 * dmvn(parameters, numParameters, NULL,
-                         sdInverse, logDetCov, TRUE);
+    result += getSumOfSquares(parameters, numParameters) * varInverse;
+    
   } else if (numHyperparameters == numParameters) {
-    double sdsInverse[numParameters];
-    for (int i = 0; i < numParameters; ++i) sdsInverse[i] = hyperparameters[i] / sqrt(commonScale);
+    double* sdsInverse;
+    double temp[numParameters];
+    if (useCommonScale) {
+      for (int i = 0; i < numParameters; ++i) temp[i] = hyperparameters[i] / sqrt(commonScale);
+      sdsInverse = temp;
+    } else {
+      sdsInverse = hyperparameters;
+    }
     
-    result = -2.0 * dmvn2(parameters, numParameters, NULL,
-                          sdsInverse, logDetCov, TRUE);
+    for (int i = 0; i < numParameters; ++i) {
+      result += parameters[i] * parameters[i] * sdsInverse[i] * sdsInverse[i];
+    }
+    
   } else if (numHyperparameters == 2 * numParameters * numParameters) {
     int covLength = numParameters * numParameters;
-    double covInverse[covLength];
-    hyperparameters += covLength; // skip over the left factor
-    for (int i = 0; i < covLength; ++i) covInverse[i] = hyperparameters[i] / commonScale;
+    double* covInverse;
+    double tempMatrix[covLength];
+    double tempVector[numParameters];
     
-    result = -2.0 * dmvn3(parameters, numParameters, NULL,
-                          covInverse, logDetCov, TRUE);
+    hyperparameters += covLength; // hyperparameters contains: ( logDetCov, leftFactor, covInv ). skip left factor
+    if (useCommonScale) {
+      for (int i = 0; i < covLength; ++i) tempMatrix[i] = hyperparameters[i] / commonScale;
+      covInverse = tempMatrix;
+    } else {
+      covInverse = hyperparameters;
+    }
+    
+    
+    applyMatrixToVector(covInverse, numParameters, numParameters, TRUE, parameters, tempVector);
+    
+    for (int i = 0; i < numParameters; ++i) {
+      result += parameters[i] * tempVector[i];
+    }
+    
   } else error("Internal error: for a normal prior there are %d hyperparameters but %d coefficients.",
                numHyperparameters + 1, numParameters);
   
@@ -78,10 +165,37 @@ double calculateGaussianDeviance(SEXP prior, double commonScale,
   return (result);
 }
 
-double calculateMVTDeviance(SEXP prior, double commonScale, const double *unmodeledCoefficients, int numUnmodeledCoefs)
+double getGaussianDevianceConstantPart(SEXP prior, int numParameters)
+{
+  double* hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(prior);
+  
+  double logDetCov = *hyperparameters++;
+  
+  return (logDetCov + ((double) numParameters) * (M_LN2 + 2.0 * M_LN_SQRT_PI));
+}
+
+double getMVTDevianceVaryingPart(SEXP prior, double commonScale, const double *unmodeledCoefficients, int numUnmodeledCoefs)
 {
   error("mvt not yet implemented");
   return (0.0);
+}
+
+double getMVTDevianceConstantPart(SEXP prior, int numUnmodeledCoefs)
+{
+  error("mvt not yet implemented");
+  return (0.0);
+}
+
+double getUnmodeledCoefficientPriorCommonScaleDegreesOfFreedom(SEXP prior, int numUnmodeledCoefs)
+{
+  if (PRIOR_TYPE_SLOT(prior) == PRIOR_TYPE_DIRECT &&
+      PRIOR_FAMILIES_SLOT(prior)[0] == PRIOR_FAMILY_GAUSSIAN &&
+      getCommonScaleBit(PRIOR_SCALES_SLOT(prior)[0]) == PRIOR_COMMON_SCALE_TRUE)
+  {
+    return((double) numUnmodeledCoefs);
+  }
+  
+  return(0.0);
 }
 
 void addGaussianContributionToDenseBlock(SEXP regression, double* lowerRightBlock, double commonScale)
@@ -103,7 +217,8 @@ void addGaussianContributionToDenseBlock(SEXP regression, double* lowerRightBloc
   double commonVariance = commonScale * commonScale; //DEV_SLOT(regression)[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
   // commonVariance *= commonVariance;
   
-  priorScale_t scale  = PRIOR_SCALES_SLOT(unmodeledCoefPrior)[0];
+  priorCommonScale_t useCommonScale = getCommonScaleBit(PRIOR_SCALES_SLOT(unmodeledCoefPrior)[0]);
+  
   double *hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(unmodeledCoefPrior) + 1; // skip over the log det of the covar, not needed here
   int numHyperparameters = LENGTH(GET_SLOT(unmodeledCoefPrior, blme_prior_hyperparametersSym)) - 1;
   
@@ -111,7 +226,7 @@ void addGaussianContributionToDenseBlock(SEXP regression, double* lowerRightBloc
     // hyperparameters are log(prior.sd^2) -- skipped, 1 / prior.sd
     double additiveFactor = hyperparameters[0] * hyperparameters[0];
     
-    if (scale == PRIOR_SCALE_ABSOLUTE) additiveFactor *= commonVariance;
+    if (!useCommonScale) additiveFactor *= commonVariance;
     
     // add to diagonal
     for (int i = 0; i < numUnmodeledCoefs; ++i) {
@@ -120,7 +235,7 @@ void addGaussianContributionToDenseBlock(SEXP regression, double* lowerRightBloc
   } else if (numHyperparameters == numUnmodeledCoefs) {
     // prior covariance is a diagonal matrix, so we store 1 / sqrt of those elements
     
-    if (scale == PRIOR_SCALE_ABSOLUTE) {
+    if (!useCommonScale) {
       for (int i = 0; i < numUnmodeledCoefs; ++i) {
         lowerRightBlock[i * (numUnmodeledCoefs + 1)] += commonVariance * hyperparameters[i] * hyperparameters[i];
       } 
@@ -135,7 +250,7 @@ void addGaussianContributionToDenseBlock(SEXP regression, double* lowerRightBloc
     int covarianceMatrixLength = numUnmodeledCoefs * numUnmodeledCoefs;
     double *covarianceInverse = hyperparameters + covarianceMatrixLength;
     
-    if (scale == PRIOR_SCALE_ABSOLUTE) {
+    if (!useCommonScale) {
       // just need to copy in the upper right block
       int offset;
       for (int col = 0; col < numUnmodeledCoefs; ++col) {
@@ -159,185 +274,4 @@ void addGaussianContributionToDenseBlock(SEXP regression, double* lowerRightBloc
   
   //Rprintf("after:\n");
   //printMatrix(lowerRightBlock, numUnmodeledCoefs, numUnmodeledCoefs);
-}
-
-
-// As Newton's method is x_n+1 = x_n - f'(x) / f"(x), this function
-// computes f'(x) and f"(x) as a function of the common scale
-//
-// the calculations it uses are in the accompanying pdf, but briefly
-// the first derivative is related to the sample size, the residual sum of
-// squares, and a new term which involves rotating the projection
-// of the unmodeled coefficients
-//
-// the second derivative involves all of the above, plus the projection
-// of the unmodeled coefficients rotated twice
-//
-// that is
-//   f'(x) = a * N + b * PWRSS + c * || Rx^-1 beta.tilde ||^2
-//   f"(x) = d * N + e * PWRSS + f * || Rx^-1 beta.tilde ||^2 + g * || Rx^-T Rx^-1 beta.tilde ||^2
-void getDerivatives(SEXP regression, MERCache *cache,
-                    double *firstDerivative, double *secondDerivative)
-{
-  int    *dims      = DIMS_SLOT(regression);
-  double *deviances = DEV_SLOT(regression);
-  
-  int i_one = 1;
-  double d_one = 1.0;
-  
-  int numUnmodeledCoefs = dims[p_POS];
-  
-  SEXP unmodeledCoefPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
-  double *hyperparameters = PRIOR_HYPERPARAMETERS_SLOT(unmodeledCoefPrior) + 1; // skip over the log det of the covar, not needed here
-  unsigned int numHyperparameters = LENGTH(GET_SLOT(unmodeledCoefPrior, blme_prior_hyperparametersSym)) - 1;
-  
-  
-  // take Rx and get Rx^-1
-  const double *lowerRightFactor = RX_SLOT(regression);
-  double rightFactorInverse[numUnmodeledCoefs * numUnmodeledCoefs]; // Rx^-1
-  invertUpperTriangularMatrix(lowerRightFactor, numUnmodeledCoefs, rightFactorInverse);
-  
-  // calculate Lbeta^-1 * Rx^-1
-  int factorIsTriangular = TRUE;
-  if (numHyperparameters == 1) {
-    // multiply by a scalar
-    // printMatrix(lowerRightFactor, numUnmodeledCoefs, numUnmodeledCoefs);
-    for (int col = 0; col < numUnmodeledCoefs; ++col) {
-      int offset = col * numUnmodeledCoefs;
-      for (int row = 0; row <= col; ++row) {
-        rightFactorInverse[offset++] *= hyperparameters[0];
-      }
-    }
-    // printMatrix(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs);
-  } else if (numHyperparameters == numUnmodeledCoefs) {
-    // left multiply by a diagonal matrix
-    double *diagonal = hyperparameters;
-    
-    for (int col = 0; col < numUnmodeledCoefs; ++col) {
-      int offset = col * numUnmodeledCoefs;
-      for (int row = 0; row <= col; ++row) {
-        rightFactorInverse[offset++] *= diagonal[row];
-      }
-    }
-  } else {
-    double *priorLeftFactorInverse = hyperparameters;
-    // want L * R
-    // Left multiply, Lower triangluar matrix, No-transpose, Non-unit
-    F77_CALL(dtrmm)("L", "L", "N", "N", &numUnmodeledCoefs, &numUnmodeledCoefs, &d_one,
-                    priorLeftFactorInverse, &numUnmodeledCoefs,
-                    rightFactorInverse, &numUnmodeledCoefs);
-    factorIsTriangular = FALSE;
-  }
-  
-  double projectionRotation[numUnmodeledCoefs];
-  Memcpy(projectionRotation, (const double *) cache->unmodeledCoefProjection, numUnmodeledCoefs);
-  
-  // this step corresponds to Rx^-1 * unmodeled coef projection
-  if (factorIsTriangular) {
-    // X := A x, A triangular
-    F77_CALL(dtrmv)("Upper triangular", "Non transposed", "Non unit diagonal",
-                    &numUnmodeledCoefs, rightFactorInverse, &numUnmodeledCoefs,
-                    projectionRotation, &i_one);
-  } else {
-    applyMatrixToVector(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs, FALSE,
-                        projectionRotation, projectionRotation);
-  }
-  
-  double firstRotationSumOfSquares = getSumOfSquares(projectionRotation, numUnmodeledCoefs);
-  
-  // now for Rx^-T Rx^-1 * modeled coef projection
-  if (factorIsTriangular) {
-    // X: = A' x, A triangular
-    F77_CALL(dtrmv)("Upper triangular", "Transposed", "Non unit diagonal",
-                    &numUnmodeledCoefs, rightFactorInverse, &numUnmodeledCoefs,
-                    projectionRotation, &i_one);
-  } else {
-    applyMatrixToVector(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs, TRUE,
-                        projectionRotation, projectionRotation);
-  }
-  
-  double secondRotationSumOfSquares = getSumOfSquares(projectionRotation, numUnmodeledCoefs);
-  
-  
-  // in general, DoF depends on unmodeled coefficient prior scale, as we can get back those
-  // lost DoF. However, in that case we can't get here, where optimization is required.
-  double degreesOfFreedom = cache->priorDegreesOfFreedom + (double) (dims[n_POS] - (dims[isREML_POS] ? dims[p_POS] : 0));
-  double currCommonSd = deviances[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
-  double currCommonVariance = currCommonSd * currCommonSd;
-  
-  *firstDerivative =
-  (deviances[pwrss_POS] / currCommonVariance - firstRotationSumOfSquares -
-   degreesOfFreedom) / currCommonSd;
-  *secondDerivative =
-  (-3.0 * deviances[pwrss_POS] / currCommonVariance + 3.0 * firstRotationSumOfSquares +
-   degreesOfFreedom) / currCommonVariance + 4.0 * secondRotationSumOfSquares;
-  
-  // From here, done unless REML. REML involves taking the derivative of
-  // the log determinant of LxLx' (with some unmodeled covariance terms),
-  // which is just the trace of the product. The second derivative is
-  // the trace of the "square" of that product.
-  
-  if (dims[isREML_POS]) {
-    int covarianceMatrixLength = numUnmodeledCoefs * numUnmodeledCoefs;
-    double crossproduct[covarianceMatrixLength];
-    
-    // we square the left factor Lx^-T * Lx^-1. the trace of this is immediately
-    // useful, but we also need the trace of its square. Fortunately, the trace
-    // of AA' is simply the sum of the squares of all of the elements.
-    if (factorIsTriangular) {
-      // want UU'
-      singleTriangularMatrixCrossproduct(rightFactorInverse, numUnmodeledCoefs, TRUE,
-                                         TRIANGLE_TYPE_UPPER, crossproduct);
-    } else {
-      singleMatrixCrossproduct(rightFactorInverse, numUnmodeledCoefs, numUnmodeledCoefs,
-                               crossproduct, TRUE, TRIANGLE_TYPE_UPPER);
-    }
-    double firstOrderTrace  = 0.0;
-    double secondOrderTrace = 0.0;
-    int offset;
-    // as the cross product is symmetric, we only have to use its upper
-    // triangle and the diagonal
-    for (int col = 0; col < numUnmodeledCoefs; ++col) {
-      offset = col * numUnmodeledCoefs;
-      for (int row = 0; row < col; ++row) {
-        secondOrderTrace += 2.0 * crossproduct[offset] * crossproduct[offset];
-        ++offset;
-      }
-      
-      firstOrderTrace  += crossproduct[offset];
-      secondOrderTrace += crossproduct[offset] * crossproduct[offset];
-    }
-    
-    *firstDerivative  -=  currCommonSd * firstOrderTrace;
-    *secondDerivative += -firstOrderTrace + 2.0 * currCommonVariance * secondOrderTrace;
-  }
-}
-
-
-// Externally callable. Sets up and fills a cache, then returns the computed
-// derivatives.
-//
-// Works on the **deviance** scale, so -2 * logLik.
-SEXP bmer_getDerivatives(SEXP regression) {
-  MERCache *cache = createLMMCache(regression);
-  
-  rotateSparseDesignMatrix(regression);
-  updateWeights(regression, cache);
-  updateAugmentedDesignMatrixFactorizations(regression, cache);
-  
-  calculateProjections(regression, cache);
-  calculatePenalizedWeightedResidualSumOfSquaresFromProjections(regression, cache);
-  
-  double firstDerivative;
-  double secondDerivative;
-  getDerivatives(regression, cache, &firstDerivative, &secondDerivative);
-  
-  deleteLMMCache(cache);
-  SEXP resultExp = PROTECT(allocVector(REALSXP, 2));
-  double *result = REAL(resultExp);
-  result[0] = -2.0 * firstDerivative;
-  result[1] = -2.0 * secondDerivative;
-  UNPROTECT(1);
-  
-  return(resultExp);
 }

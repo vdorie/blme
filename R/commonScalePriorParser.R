@@ -5,8 +5,9 @@ getCommonScaleDefault <- function(regression, family)
   fillDefaults <- function(x, ...) x;
   if (result$family == INVGAMMA_FAMILY_NAME) {
     fillDefaults <- getCommonScaleInverseGammaDefaults;
-  }
-  if (result$family == POINT_FAMILY_NAME) {
+  } else if (result$family == GAMMA_FAMILY_NAME) {
+    fillDefaults <- getCommonScaleGammaDefaults;
+  } else if (result$family == POINT_FAMILY_NAME) {
     fillDefaults <- getCommonScalePointDefaults;
   }
 
@@ -84,6 +85,14 @@ parseCommonScalePrior <- function(regression, specification, family, callingEnvi
     prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     fillDefaults <- getCommonScaleInverseGammaDefaults;
+  } else if (family == GAMMA_FAMILY_NAME) {
+    prior <- list(family = GAMMA_FAMILY_NAME);
+
+    prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$rate  <- getPriorOption(RATE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+
+    fillDefaults <- getCommonScaleGammaDefaults;
   }
 
   if (length(namedOptions) > 0) {
@@ -104,25 +113,24 @@ getCommonScalePriorFields <- function(regression, prior)
   numUnmodeledCoefs <- regression@dims[["p"]];
   
   families <- integer(0);
-  scales   <- integer(0);
   hyperparameters <- double(0);
+
+  posteriorScale <- getEnumOrder(posteriorScaleEnum, prior$posteriorScale);
+  commonScale    <- getEnumOrder(commonScaleEnum, defaultCommonScaleCommonScale); # should be just "true"
+  scales <- .Call(bmer_getScaleInt, posteriorScale, commonScale);
   
   if (prior$family == POINT_FAMILY_NAME) {
-    families <- getEnumOrder(familyEnumeration, POINT_FAMILY_NAME);
-    scales   <- getEnumOrder(scaleEnumeration, prior$posteriorScale);
+    families <- getEnumOrder(familyEnum, POINT_FAMILY_NAME);
 
     hyperparameters <- prior$value;
   } else if (prior$family == INVGAMMA_FAMILY_NAME) {
-    families <- getEnumOrder(familyEnumeration, INVGAMMA_FAMILY_NAME);
-    scales   <- getEnumOrder(scaleEnumeration, prior$posteriorScale);
+    families <- getEnumOrder(familyEnum, INVGAMMA_FAMILY_NAME);
 
-    shape <- prior$shape;
-    if (prior$posteriorScale == SD_SCALE_NAME) {
-      # posterior on sd scale with scale = 0, divide shape by 2 to
-      # get posterior on var scale
-      shape <- shape / 2;
-    }
-    hyperparameters <- c(shape, prior$scale);
+    hyperparameters <- c(prior$shape, prior$scale);
+  } else if (prior$family == GAMMA_FAMILY_NAME) {
+    families <- getEnumOrder(familyEnum, GAMMA_FAMILY_NAME);
+
+    hyperparameters <- c(prior$shape, prior$rate);
   }
 
   return (list(families        = families,
@@ -144,29 +152,30 @@ getCommonScalePointDefaults <- function(prior)
 
 getCommonScaleInverseGammaDefaults <- function(prior)
 {
-  if (is.null(prior$shape)) {
-    prior$shape <- defaultCommonScaleInverseGammaShape;
-  }
-  
-  if (is.null(prior$scale)) {
-    prior$scale <- defaultCommonScaleInverseGammaScale;
-  }
+  if (is.null(prior$shape)) prior$shape <- defaultCommonScaleInverseGammaShape;
+  if (is.null(prior$scale)) prior$scale <- defaultCommonScaleInverseGammaScale;
+  if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultCommonScaleInverseGammaPosteriorScale;
 
-  if (is.null(prior$posteriorScale)) {
-    prior$posteriorScale <- defaultCommonScaleInverseGammaPosteriorScale;
-  }
+  return(prior);
+}
+
+getCommonScaleGammaDefaults <- function(prior)
+{
+  if (is.null(prior$shape)) prior$shape <- defaultCommonScaleGammaShape;
+  if (is.null(prior$rate))  prior$rate  <- defaultCommonScaleGammaRate;
+  if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultCommonScaleGammaPosteriorScale;
 
   return(prior);
 }
 
 commonScalePriorToString <- function(regression)
 {
-  if (regression@var.prior@type == getEnumOrder(typeEnumeration, NONE_TYPE_NAME))
+  if (regression@var.prior@type == getEnumOrder(typeEnum, NONE_TYPE_NAME))
     return(character(0));
   
   families <- regression@var.prior@families;
   scales <- regression@var.prior@scales;
   hyperparameters <- regression@var.prior@hyperparameters;
 
-  return(buildStringForFamily(families, scales, hyperparameters, TRUE)$string);
+  return(buildStringForFamily(families, scales, hyperparameters, 2, TRUE)$string);
 }

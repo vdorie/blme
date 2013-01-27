@@ -93,7 +93,19 @@ parseUnmodeledCoefficientNormalPrior <- function(regression, specification, call
     } else {
       covariance <- standardDeviation^2;
     }
-    prior$covarianceScale <- getPriorOption(COVARIANCE_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    
+    prior$onCommonScale <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    if (is.null(prior$onCommonScale)) {
+      prior[["covarianceScale"]] <- getPriorOption(COVARIANCE_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+      if (!isLinearMixedModel(regression) && !is.null(prior[["covarianceScale"]])) {
+        warning("Common-scale specified for glmm, not a relevant option and will be ignored.");
+        prior[["covarianceScale"]] <- NULL;
+      }
+    } else if (!isLinearMixedModel(regression)) {
+      warning("Common-scale specified for glmm, not a relevant option and will be ignored.");
+      prior$onCommonScale <- NULL;
+    }
+    
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
   
     if (!is.null(covariance) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -134,12 +146,9 @@ getUnmodeledCoefficientPriorFields <- function(regression, prior)
   hyperparameters <- double(0);
   
   if (prior$family == NORMAL_FAMILY_NAME) {
-    families <- getEnumOrder(familyEnumeration, NORMAL_FAMILY_NAME);
-    scales   <- getEnumOrder(scaleEnumeration, prior[["covarianceScale"]]);
-
-    if (length(scales) == 0) {
-      stop("Unable to recognize covariance scale '", prior[["covarianceScale"]], "'.");
-    }
+    families <- getEnumOrder(familyEnum, NORMAL_FAMILY_NAME);
+    scales   <- getScaleInt(getEnumOrder(posteriorScaleEnum, defaultUnmodeledCoefficientPosteriorScale),
+                            getEnumOrder(commonScaleEnum, prior$onCommonScale));
 
     covariance <- prior[["covariance"]];
     if (length(covariance) == 1) {
@@ -171,8 +180,8 @@ getUnmodeledCoefficientPriorFields <- function(regression, prior)
 
 getUnmodeledCoefficientNormalDefaults <- function(prior)
 {
-  if (is.null(prior[["covarianceScale"]]))
-    prior[["covarianceScale"]] <- defaultUnmodeledCoefficientNormalCovarianceScale;
+  if (is.null(prior$onCommonScale) && is.null(prior[["covarianceScale"]]))
+    prior$onCommonScale <- defaultUnmodeledCoefficientNormalCommonScale;
   if (is.null(prior[["covariance"]]))
     prior[["covariance"]] <- defaultUnmodeledCoefficientNormalSD^2;
   if (is.null(prior$dataScale))
@@ -183,7 +192,7 @@ getUnmodeledCoefficientNormalDefaults <- function(prior)
 
 unmodeledCoefficientPriorToString <- function(regression)
 {
-  if (regression@fixef.prior@type == getEnumOrder(typeEnumeration, NONE_TYPE_NAME))
+  if (regression@fixef.prior@type == getEnumOrder(typeEnum, NONE_TYPE_NAME))
     return(character(0));
 
   
@@ -207,5 +216,5 @@ unmodeledCoefficientPriorToString <- function(regression)
     hyperparameters <- as.numeric(solve(covarianceInverse));
   }
 
-  return(buildStringForFamily(families, scales, hyperparameters, TRUE)$string);
+  return(buildStringForFamily(families, scales, hyperparameters, 2, TRUE)$string);
 }

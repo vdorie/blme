@@ -162,6 +162,7 @@ completeSpectralPriorFromOptions <- function(regression, callingEnvironment, fac
     prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     rate  <- getPriorOption(RATE_HYPERPARAMETER_NAME,  namedOptionsRef, unnamedOptionsRef);
     prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(rate) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -173,6 +174,7 @@ completeSpectralPriorFromOptions <- function(regression, callingEnvironment, fac
     prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     scale <- getPriorOption(SCALE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(scale) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -200,6 +202,7 @@ getSpectralGammaDefaults <- function(regression, callingEnvironment, factorNumbe
 {
   if (is.null(prior$shape))          prior$shape <- defaultSpectralGammaShape;
   if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultSpectralPosteriorScale;
+  if (is.null(prior$commonScale))    prior$commonScale <- defaultSpectralCommonScale;
   if (is.null(prior$rate))           prior$rate <- defaultSpectralGammaRate;
   if (is.null(prior$dataScale))      prior$dataScale <- defaultSpectralDataScale;
 
@@ -210,6 +213,7 @@ getSpectralInverseGammaDefaults <- function(regression, callingEnvironment, fact
 {
   if (is.null(prior$shape))          prior$shape <- defaultSpectralInverseGammaShape;
   if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultSpectralPosteriorScale;
+  if (is.null(prior$commonScale))    prior$commonScale <- defaultSpectralCommonScale;
   if (is.null(prior$scale))          prior$scale <- defaultSpectralInverseGammaScale;
   if (is.null(prior$dataScale))      prior$dataScale <- defaultSpectralDataScale;
 

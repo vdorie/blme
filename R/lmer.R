@@ -147,8 +147,9 @@ lmerFrames <- function(mc, formula, contrasts, vnms = character(0))
 
     ## The model formula for the fixed-effects terms only.
     fixed.form <- nobars(formula)       # remove any terms with `|'
-    if (inherits(fixed.form, "name"))   # RHS is empty - use `y ~ 1'
-        fixed.form <- substitute(foo ~ 1, list(foo = fixed.form))
+    if (inherits(fixed.form, "name"))
+      # RHS is empty - use `y ~ 1'
+      fixed.form <- as.formula(substitute(foo ~ 1, list(foo = fixed.form)))
 
     ## attach the correct environment
     environment(fixed.form) <- environment(frame.form) <- environment(formula)
@@ -225,6 +226,32 @@ isNested <- function(f1, f2)
              "CsparseMatrix")
     all(diff(sm@p) < 2)
 }
+
+isREML <- function(x, ...) UseMethod("isREML")
+isLMM  <- function(x, ...) UseMethod("isLMM")
+isNLMM <- function(x, ...) UseMethod("isNLMM")
+isGLMM <- function(x, ...) UseMethod("isGLMM")
+
+##' @S3method isREML mer
+isREML.mer <- function(x, ...) as.logical(x@dims["REML"])
+
+##' @S3method isGLMM mer
+isGLMM.mer <- function(x,...) {
+    length(x@muEta) > 0
+  ## or: is(x@resp,"glmResp")
+}
+
+##' @S3method isNLMM mer
+isNLMM.mer <- function(x,...) {
+  ## or: is(x@resp,"nlsResp")
+  !isLMM.mer(x) & !isGLMM.mer(x)
+}
+
+##' @S3method isLMM mer
+isLMM.mer <- function(x,...) as.logical(x@dims["LMM"])
+## or: is(x@resp,"lmerResp") ?
+
+
 
 ##' dimsNames and devNames are in the package's namespace rather than
 ##' in the function lmerFactorList because the function sparseRasch
@@ -366,8 +393,10 @@ lmerControl <- function(msVerbose = getOption("verbose"),
 	 msVerbose = as.integer(msVerbose))# "integer" on purpose
 }
 
+##' Generate a named vector of the given mode.
+##' NB: If \code{defaults} contains more than one entry of a given name,
+##' the *last* one wins
 VecFromNames <- function(nms, mode = "numeric", defaults = list())
-### Generate a named vector of the given mode
 {
     ans <- vector(mode = mode, length = length(nms))
     names(ans) <- nms
@@ -394,7 +423,7 @@ mkZt <- function(FL, start, s = 1L)
     Ztl <- lapply(trms, `[[`, "Zt")
     Zt <- do.call(rBind, Ztl)
     Zt@Dimnames <- vector("list", 2)
-    Gp <- unname(c(0L, cumsum(sapply(Ztl, nrow))))
+    Gp <- c(0L, cumsum(vapply(Ztl, nrow, 1L, USE.NAMES=FALSE)))
     .Call(mer_ST_initialize, ST, Gp, Zt)
     A <- do.call(rBind, lapply(trms, `[[`, "A"))
     rm(Ztl, FL)                         # because they could be large

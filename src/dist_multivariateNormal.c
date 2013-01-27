@@ -3,7 +3,7 @@
 #include <Rmath.h>               /* gamma functions */
 #include <R_ext/Lapack.h>        /* for Lapack and BLAS */
 
-#include "multivariateNormal.h"
+#include "dist_multivariateNormal.h"
 #include "matrix.h"
 
 /**

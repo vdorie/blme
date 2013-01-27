@@ -140,8 +140,8 @@ printBmer <- function(x, digits = max(3, getOption("digits") - 3),
           }
           else {
             corf <- matrix(format(round(corF@x, 3), nsmall = 3),
-                           ncol = p,
-                           dimnames = list(rns, abbreviate(rn, minlength=6)))
+                           ncol = p, dimnames = list(rns,
+                                       abbreviate(rn, minlength=6)))
             corf[!lower.tri(corf)] <- ""
             print(corf[-1, -p, drop=FALSE], quote = FALSE)
           }
@@ -191,13 +191,14 @@ formatVC <- function(varc, digits = max(3, getOption("digits") - 2))
 printBmerPrior <- function(x, digits = max(3, getOption("digits") - 3))
 {
   hyperparameters <- x@hyperparameters;
-  if (x@type == getEnumOrder(typeEnumeration, DIRECT_TYPE_NAME)) {
-    if (x@families[1] == getEnumOrder(familyEnumeration, NORMAL_FAMILY_NAME)) {
+  if (x@type == getEnumOrder(typeEnum, DIRECT_TYPE_NAME)) {
+    if (x@families[1] == getEnumOrder(familyEnum, NORMAL_FAMILY_NAME)) {
       hyperparameters <- hyperparameters[-1];
     }
+  } else if (x@type == getEnumOrder(typeEnum, NONE_TYPE_NAME)) {
+    return("type: none");
   }
-  hyperparameters <- round(hyperparameters, digits);
-  familyString <- buildStringForFamily(x@families, x@scales, hyperparameters, FALSE);
+  familyString <- buildStringForFamily(x@families, x@scales, hyperparameters, digits, FALSE);
   cat(familyString$string, "\n", sep="");
 }
 

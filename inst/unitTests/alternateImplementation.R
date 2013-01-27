@@ -1,140 +1,3 @@
-blme_getBlockCov <- function(blockList, numRepsPerBlock) {
-  numFactors <- length(blockList);
-  factorDims <- sapply(blockList, nrow);
-
-  # suppose blocks can be decomps, but ignore that for now
-  numNonZeroes <- sum(factorDims^2 * numRepsPerBlock);
-  rowIndices <- rep(0, numNonZeroes);
-  colIndices <- rep(0, numNonZeroes);
-  values <- rep(0, numNonZeroes);
-
-  sparseIndex <- 1;
-  upperLeftIndex <- 1;
-  for (i in 1:numFactors) {
-    numParams <- factorDims[i];
-    numValues <- numParams^2;
-
-    for (j in 1:numRepsPerBlock[i]) {
-      sparseRange <- sparseIndex + 1:numValues - 1;
-      upperLeftRange <- upperLeftIndex + 1:numParams - 1;
-
-      rowIndices[sparseRange] <- rep(upperLeftRange, numParams);
-      colIndices[sparseRange] <- rep(upperLeftRange, rep(numParams, numParams));
-      values[sparseRange] <- as.vector(blockList[[i]]);
-
-      sparseIndex <- sparseIndex + numValues;
-      upperLeftIndex <- upperLeftIndex + numParams;
-    }
-  }
-
-  return(sparseMatrix(rowIndices, colIndices, x = values));
-}
-
-blme_stToCov <- function(ST) {
-  dimension <- nrow(ST);
-  T <- ST;
-  diag(T) <- rep(1, dimension);
-  S <- diag(diag(ST), dimension);
-  return(tcrossprod(T %*% S));
-}
-
-blme_stToChol <- function(ST) {
-  dimension <- nrow(ST);
-  T <- ST;
-  diag(T) <- rep(1, dimension);
-  S <- diag(diag(ST), dimension);
-  return(T %*% S);
-}
-
-blme_covToSdCor <- function(cov) {
-  sds <- diag(sqrt(diag(cov)));
-  sds.inv <- diag(1 / sqrt(diag(cov)));
-  cor <- sds.inv %*% cov %*% sds.inv;
-  return(list(sds = sds, cor = cor));
-}
-
-blme_covToSt <- function(cov) {
-  TS <- t(chol(cov));
-  S.inv <- diag(1 / diag(TS));
-  ST <- TS %*% S.inv;
-  diag(ST) <- diag(TS);
-  return(ST);
-}
-
-blme_ranefVcov <- function(model) {
-  Sigmas <- lapply(model@ST, blme_stToCov);
-
-  factorDims <- sapply(model@ST, nrow);
-  numRepsPerBlock <- (model@Gp[-1] - model@Gp[-length(model@Gp)]) / factorDims;
-
-  return(blme_getBlockCov(Sigmas, numRepsPerBlock));
-}
-
-blme_ranefVcovInv <- function(model) {
-  Lambdas <- lapply(model@ST, blme_stToChol);
-  Lambdas.inv <- lapply(Lambdas, solve);
-  Sigmas.inv <- lapply(Lambdas.inv, crossprod);
-
-  factorDims <- sapply(model@ST, nrow);
-  numRepsPerBlock <- (model@Gp[-1] - model@Gp[-length(model@Gp)]) / factorDims;
-
-  return(blme_getBlockCov(Sigmas.inv, numRepsPerBlock));
-}
-
-blme_ranefChol <- function(model) {
-  Lambdas <- lapply(model@ST, blme_stToChol);
-  factorDims <- sapply(model@ST, nrow);
-  
-  numRepsPerBlock <- (model@Gp[-1] - model@Gp[-length(model@Gp)]) / factorDims;
-
-  return(blme_getBlockCov(Lambdas, numRepsPerBlock));
-}
-
-blme_logDetVcov <- function(model) {
-  numFactors <- model@dims[["nt"]];
-  
-  Lambdas <- lapply(model@ST, blme_stToChol);
-  
-  factorDims <- sapply(model@ST, nrow);
-  numRepsPerBlock <- (model@Gp[-1] - model@Gp[-length(model@Gp)]) / factorDims;
-
-  result <- 0;
-  for (i in 1:numFactors) {
-    factorDet <- sum(log(diag(Lambdas[[i]])));
-    result <- result + factorDet * numRepsPerBlock[i];
-  }
-  return(2.0 * result);
-}
-
-# the permutation matrix used internally, produced by cholmod.
-# fill-reduces
-blme_cholmodPerm <- function(model) {
-  as(model@L@perm + 1, "pMatrix");
-}
-
-# permutes the block diagonal form into what lmer uses
-blme_ranefPerm <- function(model)
-{
-  numFactors <- model@dims[["nt"]];
-  factorDims <- sapply(model@ST, nrow);
-  numRepsPerBlock <- (model@Gp[-1] - model@Gp[-length(model@Gp)]) / factorDims;
-  
-  indices <- rep(0, sum(factorDims * numRepsPerBlock));
-
-  index <- 1;
-  offset <- 0;
-  for (k in 1:numFactors) {
-    for (l in 1:factorDims[k]) {
-      for (j in 1:numRepsPerBlock[k]) {
-        indices[index] <- offset + l + (j - 1) * factorDims[k];
-        index <- index + 1;
-      }
-    }
-    offset <- offset + numRepsPerBlock[k] * factorDims[k];
-  }
-  return(as(indices, "pMatrix"));
-}
-
 blme_getInverseInformation <- function(model) {
   # Xt.sp = sparse part of design matrix, transposed
   # X.dn  = dense part
@@ -202,54 +65,23 @@ blme_getInverseInformation <- function(model) {
   return(result);
 }
 
-blme_stMatricesToVector <- function(ST) {
-  result <- rep(0, sum(sapply(ST, function(ST.i) { n <- nrow(ST.i); n * (n + 1) / 2 })));
-  offset <- 0;
-  for (i in 1:length(ST)) {
-    factorDimension <- nrow(ST[[i]]);
-    
-    result[offset + 1:factorDimension] <- diag(ST[[i]]);
-    offset <- offset + factorDimension;
-    
-    if (factorDimension == 1) next;
-    
-    lowerTriangleLength <- factorDimension * (factorDimension - 1) / 2;
-    result[offset + 1:lowerTriangleLength] <- ST[[i]][lower.tri(ST[[i]])];
-    offset <- offset + lowerTriangleLength;
-  }
-  
-  return(result);
-}
-
-blme_stVectorToMatrices <- function(parameters, numFactors, factorDimensions) {
-  ST <- list();
-  offset <- 0;
-  for (i in 1:numFactors) {
-    factorDimension <- factorDimensions[i];
-    
-    ST.i <- diag(parameters[offset + 1:factorDimension], factorDimension);
-    offset <- offset + factorDimension;
-    
-    if (factorDimension > 1) {
-      lowerTriangleLength <- factorDimension * (factorDimension - 1) / 2;
-        ST.i[lower.tri(ST.i)] <- parameters[offset + 1:lowerTriangleLength];
-      offset <- offset + lowerTriangleLength;
-    }
-    
-    ST[[i]] <- ST.i;
-  }
-  
-  return(ST);
-}
-
 blme_rotateSparseDesign <- function(model) {
   # except for rounding errors, the following are equivalent
   .Call("mer_ST_setPars", model, blme_stMatricesToVector(model@ST));
-  return(model@A);
+  A <- model@A;
+  
 #  P.ranef <- blme_ranefPerm(model);
 #  Lambda <- P.ranef %*% blme_ranefChol(model) %*% t(P.ranef);
+#  A <- t(Lambda) %*% model@Zt;
+
+  if (length(model@sqrtXWt) == 0) {
+    Cx <- A@x;
+  } else {
+    temp <- A %*% blme_getWeightMatrix(model);
+    Cx <- temp@x;
+  }
   
-#  return(t(Lambda) %*% model@Zt);
+  return(list(A = A, Cx = Cx));
 }
 
 blme_getWeightMatrix <- function(model) {
@@ -270,7 +102,7 @@ blme_computeDesignFactors <- function(model) {
 
   # except for rounding errors, the following are equivalent
   modelCopy <- model;
-  modelCopy@deviance[["sigmaML"]] <- 0.0; # just something to get it to do a deep copy
+  modelCopy@deviance[["NULLdev"]] <- 0.0; # just something to get it to do a deep copy
   .Call("mer_update_L", modelCopy);
   L <- modelCopy@L;
 #  L <- Cholesky(tcrossprod(P %*% C), Imult=1, LDL=FALSE, perm=FALSE);
@@ -278,10 +110,17 @@ blme_computeDesignFactors <- function(model) {
 #  L@type[1] <- as.integer(2);
   
   RZX <- as(solve(L, P %*% C %*% X.w, "L"), "matrix");
-  
-  if (model@fixef.prior@type == 0) {
-    RX <- as(chol(crossprod(X.w) - crossprod(RZX)), "matrix");
-  } else {
+
+  priorTypeNone     <- blme:::getEnumOrder(blme:::typeEnum, blme:::NONE_TYPE_NAME);
+  priorTypeDirect   <- blme:::getEnumOrder(blme:::typeEnum, blme:::DIRECT_TYPE_NAME);
+  priorFamilyNormal <- blme:::getEnumOrder(blme:::familyEnum, blme:::NORMAL_FAMILY_NAME);
+
+  if (model@fixef.prior@type == priorTypeNone) {
+    temp <- crossprod(X.w) - crossprod(RZX);
+    if (any(is.nan(temp@x))) browser();
+    RX <- as(chol(temp), "matrix");
+  } else if (model@fixef.prior@type == priorTypeDirect &&
+             model@fixef.prior@families[1] == priorFamilyNormal) {
     RXPartial <- crossprod(X.w) - crossprod(RZX);
     
     sigma.sq <- ifelse(model@dims[["REML"]],
@@ -298,11 +137,14 @@ blme_computeDesignFactors <- function(model) {
       Sigma.beta.inv <- matrix(hyperparameters[1:matrixLength + matrixLength],
                                ncol(model@X), ncol(model@X));
     }
-    if (model@fixef.prior@scales[1] == 2)
+
+    onCommonScale <- blme:::getScaleInt(blme:::getEnumOrder(blme:::posteriorScaleEnum, blme:::defaultUnmodeledCoefficientPosteriorScale),
+                                        blme:::getEnumOrder(blme:::commonScaleEnum, blme:::COMMON_SCALE_TRUE_NAME));
+    if (model@fixef.prior@scales[1] != onCommonScale)
       Sigma.beta.inv <- sigma.sq * Sigma.beta.inv;
     RX <- as(chol(RXPartial + Sigma.beta.inv), "matrix");
   }
-  
+
   return(list(L = L, RZX = RZX, RX = RX));
 }
 
@@ -318,20 +160,16 @@ blme_calculateJointMode <- function(model) {
   P <- blme_cholmodPerm(model);
 
   theta.tilde <- solve(model@L, P %*% C %*% Y.w, "L");
-  beta.tilde <- solve(t(model@RX), crossprod(X.w, Y.w) - crossprod(model@RZX, theta.tilde));
+  beta.tilde  <- solve(t(model@RX), crossprod(X.w, Y.w) - crossprod(model@RZX, theta.tilde));
     
-  beta.hat <- as(solve(model@RX, beta.tilde), "numeric");
+  beta.hat  <- as(solve(model@RX, beta.tilde), "numeric");
   theta.hat <- as(solve(model@L, theta.tilde - model@RZX %*% beta.hat, "Lt"), "numeric");
-
-  pwrss <- (crossprod(Y.w) - (crossprod(theta.tilde) +
-                              crossprod(beta.tilde)))[1];
   
   return(list(beta.hat = beta.hat, theta.hat = theta.hat,
-              beta.tilde = beta.tilde, theta.tilde = theta.tilde,
-              pwrss = pwrss));
+              beta.tilde = beta.tilde, theta.tilde = theta.tilde));
 }
 
-blme_calculateDeviances <- function(model) {
+blme_calculateDeviances <- function(model, modes, stParameters) {
   C <- model@A;
 
   W <- blme_getWeightMatrix(model);
@@ -345,38 +183,46 @@ blme_calculateDeviances <- function(model) {
   theta.hat <- model@u;
   beta.hat <- model@fixef;
 
-  deviance <- model@deviance;
-  pwrss <- deviance[["pwrss"]];
-  deviance[["usqr"]] <- crossprod(model@u)[1];
-  deviance[["wrss"]] <- deviance[["disc"]] <- pwrss - deviance[["usqr"]];
-    
-  degreesOfFreedomML   <- nrow(X.w);
-  degreesOfFreedomREML <- nrow(X.w) - ncol(X.w);
+  totalSumOfSquares <- (crossprod(Y.w) - crossprod(modes$theta.tilde) - crossprod(modes$beta.tilde))[1];
 
+  deviance <- model@deviance;
+  deviance[["usqr"]] <- crossprod(model@u)[1];
+
+  priorDF <- blme_getPriorDegreesOfFreedom(model);
   
-  if (model@fixef.prior@type == 0) {
-    deviance[["sigmaML"]]   <- sqrt(pwrss / degreesOfFreedomML);
-    deviance[["sigmaREML"]] <- sigmaREML <- sqrt(pwrss / degreesOfFreedomREML);
-    
-    deviance[["ML"]]   <- deviance[["ldL2"]] +
-      degreesOfFreedomML   * (1 + log(pwrss) + log(2 * pi / degreesOfFreedomML));
-    deviance[["REML"]] <- deviance[["ldL2"]] + deviance[["ldRX2"]] +
-      degreesOfFreedomREML * (1 + log(pwrss) + log(2 * pi / degreesOfFreedomREML));
+  degreesOfFreedomML   <- model@dims[["n"]];
+  degreesOfFreedomREML <- model@dims[["n"]] -  model@dims[["p"]];
+  
+  if (blme_canProfileCommonScale(model)) {
+    priorExpPart <- blme_getCommonScaleExponentialPart(model, stParameters);
+
+    deviance[["sigmaML"]]   <- sigmaML   <- sqrt((totalSumOfSquares + 2.0 * priorExpPart$mTwo) / (degreesOfFreedomML + priorDF));
+    deviance[["sigmaREML"]] <- sigmaREML <- sqrt((totalSumOfSquares + 2.0 * priorExpPart$mTwo) / (degreesOfFreedomREML + priorDF));
   } else {
-    sigmaML.sq   <- deviance[["sigmaML"]]^2;
-    sigmaREML.sq <- deviance[["sigmaREML"]]^2;
-    
-    deviance[["ML"]]   <- deviance[["ldL2"]] +
-      degreesOfFreedomML   * log(2 * pi *   sigmaML.sq) + pwrss / sigmaML.sq;
-    deviance[["REML"]] <- deviance[["ldL2"]] + deviance[["ldRX2"]] +
-      degreesOfFreedomREML * log(2 * pi * sigmaREML.sq) + pwrss / sigmaREML.sq;
+    sigmaML   <- deviance[["sigmaML"]];
+    sigmaREML <- deviance[["sigmaREML"]];
   }
+    
+  sigmaML.sq   <- sigmaML^2;
+  sigmaREML.sq <- sigmaREML^2;
+
+  deviance[["wrss"]] <- crossprod(Y.w - X.w %*% modes$beta.hat - crossprod(P %*% C, modes$theta.hat))[1];
+  pwrss <- deviance[["wrss"]] + deviance[["usqr"]];
+  deviance[["ML"]]   <- deviance[["ldL2"]] +
+    degreesOfFreedomML   * log(2 * pi *   sigmaML.sq) + pwrss / sigmaML.sq;
+  deviance[["REML"]] <- deviance[["ldL2"]] + deviance[["ldRX2"]] +
+    degreesOfFreedomREML * log(2 * pi * sigmaREML.sq) + pwrss / sigmaREML.sq;
 
   return(deviance);
 }
 
-blme_deviance <- function(parameters, model) {
-  if (model@fixef.prior@type[1] != 0) {
+blme_getObjectiveFunction <- function(model) {
+  parameters <- blme_stMatricesToVector(model@ST);
+  return(blme_getObjectiveFunctionForParameters(parameters, model));
+}
+
+blme_getObjectiveFunctionForParameters <- function(parameters, model) {
+  if (blme_parametersIncludeCommonScale(model)) {
     stParameters <- parameters[-length(parameters)];
     if (model@dims[["REML"]]) {
       model@deviance[["sigmaREML"]] <- parameters[length(parameters)];
@@ -388,7 +234,11 @@ blme_deviance <- function(parameters, model) {
   }
   
   model@ST <- blme_stVectorToMatrices(stParameters, model@dims[["nt"]], sapply(model@ST, nrow));
-  model@A <- blme_rotateSparseDesign(model);
+  if (any(sapply(model@ST, function(ST) any(diag(ST) < 0)))) return(.Machine$double.xmax * .Machine$double.eps);
+  sparseParts <- blme_rotateSparseDesign(model);
+  model@A <- sparseParts$A;
+  model@Cx <- sparseParts$Cx;
+  
   factorizations <- blme_computeDesignFactors(model);
   model@L <- factorizations$L;
   model@RZX <- factorizations$RZX;
@@ -396,15 +246,17 @@ blme_deviance <- function(parameters, model) {
   
   model@deviance[["ldL2"]]  <- 2.0 * determinant(model@L,  logarithm=TRUE)$modulus;
   model@deviance[["ldRX2"]] <- 2.0 * determinant(model@RX, logarithm=TRUE)$modulus;
-  
+
   modes <- blme_calculateJointMode(model);
   
   model@fixef <- modes$beta.hat;
   model@u     <- modes$theta.hat;
-  model@deviance[["pwrss"]] <- modes$pwrss;
-  
-  model@deviance <- blme_calculateDeviances(model);
-  
-  if (model@dims[["REML"]]) return(model@deviance[["REML"]]);
-  return(model@deviance[["ML"]]);
+
+  model@deviance <- blme_calculateDeviances(model, modes, stParameters);
+
+  result <- ifelse(model@dims[["REML"]], model@deviance[["REML"]], model@deviance[["ML"]]);
+  result <- result + blme_getPriorPenalty(model);
+
+  if (is.nan(result) || !is.finite(result)) return(.Machine$double.xmax * .Machine$double.eps);
+  return(result);
 }

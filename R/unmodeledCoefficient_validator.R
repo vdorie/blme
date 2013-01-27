@@ -29,35 +29,47 @@ validateUnmodeledCoefficientPrior <- function(regression, prior)
   errorPrefix <- paste("Error applying prior to unmodeled coefficients: ", sep="");
     
   if (prior$dataScale != ABSOLUTE_SCALE_NAME &&
-      prior$dataScale != FREE_SCALE_NAME) {
+      prior$dataScale != FREE_SCALE_NAME)
+  {
     stop(errorPrefix,  "data scale must be '",
          ABSOLUTE_SCALE_NAME, "' or '", FREE_SCALE_NAME, "', was '",
          prior$dataScale, "'.");
   }
   
   if (prior$family == NORMAL_FAMILY_NAME) {
-    covarianceScale <- prior[["covarianceScale"]];
-    if (covarianceScale != ABSOLUTE_SCALE_NAME &&
-        covarianceScale != COMMON_SCALE_NAME)
-      stop(errorPrefix, "covariance scale must be '",
-         ABSOLUTE_SCALE_NAME, "' or '", COMMON_SCALE_NAME, "', was '",
-         covarianceScale, "'.");
+    if (!is.null(prior$onCommonScale)) {
+      onCommonScale <- prior$onCommonScale;
+    } else {
+      covScale <- prior[["covarianceScale"]];
+      warning("Option 'cov.scale' for fixef priors has been deprecated. Use 'common.scale' = '",
+              COMMON_SCALE_TRUE_NAME, "' or '", COMMON_SCALE_FALSE_NAME, "' instead.");
+      if (covScale != ABSOLUTE_SCALE_NAME && covScale != COMMON_SCALE_NAME)
+        stop(errorPrefix, "cov.scale must be '",
+             ABSOLUTE_SCALE_NAME, "' or '", COMMON_SCALE_NAME, "', was '",
+             covScale, "'.");
+      onCommonScale <- ifelse(covScale == COMMON_SCALE_NAME,
+                              COMMON_SCALE_TRUE_NAME,
+                              COMMON_SCALE_FALSE_NAME);
+    }
 
-    if (!isLinearMixedModel(regression) && covarianceScale == COMMON_SCALE_NAME)
-      stop(errorPrefix, "covariance scale of '", COMMON_SCALE_NAME,
-           "' can only be applied to linear mixed models.");
-
+    if (is.logical(onCommonScale))
+      onCommonScale <- ifelse(onCommonScale, COMMON_SCALE_TRUE_NAME, COMMON_SCALE_FALSE_NAME);
+    if (onCommonScale != COMMON_SCALE_TRUE_NAME &&
+        onCommonScale != COMMON_SCALE_FALSE_NAME) {
+      stop(errorPrefix, "common.scale must be '", COMMON_SCALE_TRUE_NAME, "' or '",
+           COMMON_SCALE_FALSE_NAME, "'.");
+    }
+    prior$onCommonScale <- onCommonScale;
     
     covariance <- prior[["covariance"]];
-
-    if (!is.numeric(covariance)) stop(errorPrefix, "covariance for Normal evaluated as non-numeric.");
-
+    if (!is.numeric(covariance)) stop(errorPrefix, "covariance for normal evaluated as non-numeric.");
+    
     if (!is.matrix(covariance)) {
       if (length(covariance) != 1 && length(covariance) != 2 &&
           length(scale) != numUnmodeledCoefs)
-        stop(errorPrefix, "scale for Wishart evaluated to a numeric value with unsuitable length.");
-
-      if (any(covariance <= 0)) stop(errorPrefix, "covariance for Normal is not positive definite.");
+        stop(errorPrefix, "covariance for normal evaluated to a numeric value with unsuitable length.");
+      
+      if (any(covariance <= 0)) stop(errorPrefix, "covariance for normal is not positive definite.");
       
       if (length(covariance) == 2) {
         covariance <- diag(c(covariance[1], rep(covariance[2], numUnmodeledCoefs - 1)), numUnmodeledCoefs);
@@ -67,19 +79,18 @@ validateUnmodeledCoefficientPrior <- function(regression, prior)
     
     if (is.matrix(covariance)) {  
       if (nrow(covariance) != ncol(covariance))
-        stop(errorPrefix, "covariance for Normal not a square matrix.");
+        stop(errorPrefix, "covariance for normal not a square matrix.");
       
       if (nrow(covariance) != numUnmodeledCoefs)
-        stop(errorPrefix, "covariance for Normal has dimensions not equal to the number of unmodeled coefficients.");
+        stop(errorPrefix, "covariance for normal has dimensions not equal to the number of unmodeled coefficients.");
       
       if (!isSymmetric(covariance))
-        stop(errorPrefix, "covariance for Normal is not symmetric.");
+        stop(errorPrefix, "covariance for normal is not symmetric.");
       
       logDetCov <- determinant(covariance, TRUE);
-      
-      if (logDetCov$sign < 0 || logDetCov$modulus == -Inf)
-        stop(errorPrefix, "covariance for Normal is not positive definite.");
-    }   
+      if (logDetCov$sign < 0 || !is.finite(logDetCov$modulus))
+        stop(errorPrefix, "covariance for normal is not positive definite and finite.p");
+    }
     
     return(prior);
   }

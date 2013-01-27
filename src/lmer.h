@@ -50,13 +50,11 @@ SEXP lme4_ghq(SEXP np);
 SEXP mer_ST_getPars(SEXP x);
 SEXP mer_ST_initialize(SEXP ST, SEXP Gp, SEXP Zt);
 SEXP mer_ST_setPars(SEXP x, SEXP pars);
+SEXP mer_update_dev(SEXP x);
 SEXP mer_create_L(SEXP CmP);
 SEXP mer_optimize(SEXP x);
 SEXP mer_update_ranef(SEXP x);
 SEXP mer_update_mu(SEXP x);
 SEXP mer_validate(SEXP x);
-
-SEXP bmer_get_dev(SEXP regression);
-SEXP bmer_approximate_dev(SEXP regression);
 
 #endif /* LME4_LMER_H */

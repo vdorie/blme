@@ -81,6 +81,20 @@ validateCovariancePrior <- function(regression, priors, factorNumber)
            ABSOLUTE_SCALE_NAME, "' or '", FREE_SCALE_NAME, "', was '",
            prior$dataScale, "'.");
     }
+
+    if (prior$posteriorScale != SD_SCALE_NAME &&
+        prior$posteriorScale != VAR_SCALE_NAME) {
+      stop(errorPrefix, "posterior scale must be '",
+           SD_SCALE_NAME, "' or '", VAR_SCALE_NAME, "', was '",
+           prior$posteriorScale, "'.");
+    }
+
+    if (prior$commonScale != COMMON_SCALE_FALSE_NAME &&
+        prior$commonScale != COMMON_SCALE_TRUE_NAME) {
+      stop(errorPrefix, "common scale must be '",
+           COMMON_SCALE_FALSE_NAME, "' or '", COMMON_SCALE_TRUE_NAME, "', was '",
+           prior$commonScale, "'.");
+    }
     
     if (prior$family == WISHART_FAMILY_NAME) {
       # check degrees of freedom
@@ -117,13 +131,15 @@ validateCovariancePrior <- function(regression, priors, factorNumber)
       
       logDetScale <- determinant(scale, TRUE);
       
-      if (logDetScale$sign < 0 || logDetScale$modulus == -Inf)
+      if (logDetScale$sign < 0)
         stop(errorPrefix, "scale for Wishart is not positive definite.");
 
       priors[[i]] <- list(family = WISHART_FAMILY_NAME,
                           degreesOfFreedom = degreesOfFreedom,
                           scale = scale,
-                          dataScale = prior$dataScale);
+                          dataScale = prior$dataScale,
+                          posteriorScale = prior$posteriorScale,
+                          commonScale = prior$commonScale);
       
     } else if (prior$family == INVWISHART_FAMILY_NAME) {
       degreesOfFreedom <- prior$degreesOfFreedom;
@@ -160,23 +176,25 @@ validateCovariancePrior <- function(regression, priors, factorNumber)
       
       logDetInverseScale <- determinant(inverseScale, TRUE);
       
-      if (logDetInverseScale$sign < 0 || logDetInverseScale$modulus == -Inf)
-        stop(errorPrefix, "inverse scale for Inverse Wishart is not positive definite.");
+      if (logDetInverseScale$sign < 0 && is.finite(logDetInverseScale$modulus))
+        stop(errorPrefix, "inverse scale for Inverse Wishart is not positive semidefinite.");
       
       priors[[i]] <- list(family = INVWISHART_FAMILY_NAME,
-                         degreesOfFreedom = degreesOfFreedom,
-                         inverseScale = inverseScale,
-                          dataScale = prior$dataScale);
+                          degreesOfFreedom = degreesOfFreedom,
+                          inverseScale = inverseScale,
+                          dataScale = prior$dataScale,
+                          posteriorScale = prior$posteriorScale,
+                          commonScale = prior$commonScale);
     } else if (prior$family == GAMMA_FAMILY_NAME) {
       if (!is.numeric(prior$shape)) stop("gamma shape must be numeric.");
-      if (prior$shape <= 0) stop(errorPrefix, "gamma shape must be greater than 0.");
+      if (prior$shape < 0) stop(errorPrefix, "gamma shape must be non-negative.");
       if (!is.numeric(prior$rate)) stop("gamma rate must be numeric.");
-      if (prior$rate <= 0) stop(errorPrefix, "gamma rate must be greater than 0.");
+      if (prior$rate < 0) stop(errorPrefix, "gamma rate must be non-negative.");
     } else if (prior$family == INVGAMMA_FAMILY_NAME) {
       if (!is.numeric(prior$shape)) stop("inverse Gamma shape must be numeric.");
-      if (prior$shape <= 0) stop(errorPrefix, "inverse Gamma shape must be greater than 0.");
+      if (prior$shape < 0) stop(errorPrefix, "inverse Gamma shape must be non-negative.");
       if (!is.numeric(prior$scale)) stop("inverse Gamma scale must be numeric.");
-      if (prior$scale <= 0) stop(errorPrefix, "inverse Gamma scale must be greater than 0.");
+      if (prior$scale < 0) stop(errorPrefix, "inverse Gamma scale must be non-negative.");
     }
   }
   

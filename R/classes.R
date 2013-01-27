@@ -20,7 +20,7 @@ setClass("summary.bmer",
 # cleanliness.
 createFlatPriorObject <- function() {
   return(new(Class           = "bmerPrior",
-             type            = getEnumOrder(typeEnumeration, NONE_TYPE_NAME),
+             type            = getEnumOrder(typeEnum, NONE_TYPE_NAME),
              families        = integer(0),
              scales          = integer(0),
              hyperparameters = double(0)));
@@ -28,7 +28,7 @@ createFlatPriorObject <- function() {
 
 createPriorObject <- function(type, fields) {
   return(new(Class           = "bmerPrior",
-             type            = getEnumOrder(typeEnumeration, type),
+             type            = getEnumOrder(typeEnum, type),
              families        = fields$families,
              scales          = fields$scales,
              hyperparameters = fields$hyperparameters));

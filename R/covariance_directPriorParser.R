@@ -96,6 +96,7 @@ completeDirectPriorFromOptions <- function(regression, callingEnvironment,
     prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     rate <- getPriorOption(RATE_HYPERPARAMETER_NAME,  namedOptionsRef, unnamedOptionsRef);
     prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale    <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     # if the user sets a rate but not a data scale, force data scale to absolute
@@ -107,7 +108,8 @@ completeDirectPriorFromOptions <- function(regression, callingEnvironment,
   } else if (family == INVGAMMA_FAMILY_NAME) {
     prior$shape <- getPriorOption(SHAPE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     scale <- getPriorOption(SCALE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
-    prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef)
+    prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale    <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(scale) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -119,6 +121,8 @@ completeDirectPriorFromOptions <- function(regression, callingEnvironment,
     prior$degreesOfFreedom <-
       getPriorOption(DEGREES_OF_FREEDOM_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     scale <- getPriorOption(SCALE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale    <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(scale) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -130,6 +134,8 @@ completeDirectPriorFromOptions <- function(regression, callingEnvironment,
     prior$degreesOfFreedom <-
       getPriorOption(DEGREES_OF_FREEDOM_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
     inverseScale <- getPriorOption(INVERSE_SCALE_HYPERPARAMETER_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$posteriorScale <- getPriorOption(POSTERIOR_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
+    prior$commonScale    <- getPriorOption(COMMON_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
     dataScale <- getPriorOption(DATA_SCALE_OPTION_NAME, namedOptionsRef, unnamedOptionsRef);
 
     if (!is.null(inverseScale) && is.null(dataScale)) dataScale <- ABSOLUTE_SCALE_NAME;
@@ -156,6 +162,7 @@ getDirectGammaDefaults <- function(regression, callingEnvironment, factorNumber,
 {
   if (is.null(prior$shape))          prior$shape <- defaultDirectGammaShape;
   if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultDirectPosteriorScale;
+  if (is.null(prior$commonScale))    prior$commonScale <- defaultDirectCommonScale;
   if (is.null(prior$rate))           prior$rate <- defaultDirectGammaRate;
   if (is.null(prior$dataScale))      prior$dataScale <- defaultDirectDataScale;
   
@@ -165,6 +172,7 @@ getDirectGammaDefaults <- function(regression, callingEnvironment, factorNumber,
 getDirectInverseGammaDefaults <- function(regression, callingEnvironment, factorNumber, prior) {
   if (is.null(prior$shape))          prior$shape <- defaultDirectInverseGammaShape;
   if (is.null(prior$posteriorScale)) prior$posteriorScale <- defaultDirectPosteriorScale;
+  if (is.null(prior$commonScale))    prior$commonScale <- defaultDirectCommonScale;
   if (is.null(prior$scale))          prior$scale <- defaultDirectInverseGammaScale;
   if (is.null(prior$dataScale))      prior$dataScale <- defaultDirectDataScale;
 
@@ -177,6 +185,9 @@ getDirectWishartDefaults <- function(regression, callingEnvironment, factorNumbe
     prior$degreesOfFreedom <- defaultDirectWishartDegreesOfFreedom;
   if (is.null(prior$scale))
     prior$scale <- defaultDirectWishartScale;
+  prior$posteriorScale <- VAR_SCALE_NAME; # sqrt of matrices not currently supported
+  if (is.null(prior$commonScale))
+    prior$commonScale <- defaultDirectCommonScale;
   if (is.null(prior$dataScale))
     prior$dataScale <- defaultDirectDataScale;
   
@@ -189,6 +200,9 @@ getDirectInverseWishartDefaults <- function(regression, callingEnvironment, fact
     prior$degreesOfFreedom <- defaultDirectInverseWishartDegreesOfFreedom;
   if (is.null(prior$inverseScale))
     prior$inverseScale <- defaultDirectInverseWishartInverseScale;
+  prior$posteriorScale <- VAR_SCALE_NAME; # sqrt of matrices not currently supported
+  if (is.null(prior$commonScale))
+    prior$commonScale <- defaultDirectCommonScale;
   if (is.null(prior$dataScale))
     prior$dataScale <- defaultDirectDataScale;
 

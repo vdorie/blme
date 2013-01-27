@@ -92,6 +92,9 @@ double getLogDeterminant(const double *matrix, int dim, int *sign);
 double getLogDeterminantOfTriangularMatrix(const double *matrix, int dim, int *sign);
 // uses a cholesky decomposition. only returns the modulus (sign must be positive).
 double getLogDeterminantOfPositiveDefiniteMatrix(const double *matrix, int dim);
+// "ST matrix" is as a Cholesky as square root of a pos-def matrix. stored as described in parameters.
+// the sign arg accepts NULL for those who are indifferent, as it shouldn't be negative
+double getLogDeterminantOfSTMatrix(const double *matrix, int dim, int* sign);
 
 // Q = (I - A)(I + A)^{-1}
 // A is skew-symmetric, so that only the lower triangle is necessary

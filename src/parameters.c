@@ -79,8 +79,8 @@ void convertSpectralToCovariance(const double *source, int dim, double *target)
 
 void convertSTToCovariance(const double *source, int dim, double *target)
 {
-  // ST is lmer style, TSST'
-  // source is stored as [ s_1 ... s_q l_21 ... l_q1 ... l_q(q-1) ]
+  // "ST" is lmer style, so Cov = TSST'
+  // source is stored as [ s_1 ... s_q l_21 ... l_q1 ... l_q(q-1) ]; length = d + d * (d - 1) / 2, d * (d + 1) / 2
   
   const double *scales = source;
   const double *factors = source + dim;
@@ -89,7 +89,7 @@ void convertSTToCovariance(const double *source, int dim, double *target)
   
   double lowerTriangle[arraySize];
 
-  // directly scale the lower triangle so that it equals TS
+  // directly scale the lower triangle so that it equals T * S
   
   double scale;
   int offset = 0;

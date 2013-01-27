@@ -29,8 +29,18 @@ validateCommonScalePrior <- function(regression, prior)
       stop(errorPrefix, "unrecognized posterior scale '", prior$posteriorScale, "'.");
     }
     
-    if (prior$posteriorScale == SD_SCALE_NAME && prior$scale != 0)
-      stop(errorPrefix, "inv-gamma prior on sd-scale only conjugate if scale is zero.");
+    return(prior);
+  } else if (prior$family == GAMMA_FAMILY_NAME) {
+    if (!is.numeric(prior$shape)) stop(errorPrefix, "gamma prior shape must be numeric.");
+    if (prior$shape < 0) stop(errorPrefix, "gamma prior shape must be non-negative.");
+    
+    if (!is.numeric(prior$rate)) stop(errorPrefix, "gamma prior rate must be numeric.");
+    if (prior$rate < 0) stop(errorPrefix, "gamma prior rate must be non-negative.");
+
+    if (prior$posteriorScale != SD_SCALE_NAME &&
+        prior$posteriorScale != VAR_SCALE_NAME) {
+      stop(errorPrefix, "unrecognized posterior scale '", prior$posteriorScale, "'.");
+    }
 
     return(prior);
   }

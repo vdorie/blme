@@ -1,0 +1,7 @@
+#					Dear Emacs, treat me as -*- Makefile -*-
+PKG_LIBS=$(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+
+## default 'lme4.dll' does not work in Namespace registration for R <= 2.14.x
+all: lme4.dll
+lme4.dll: $(OBJECTS)
+	$(SHLIB_LINK) -o $@ $(OBJECTS) $(ALL_LIBS)

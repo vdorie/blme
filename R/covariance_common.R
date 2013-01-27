@@ -14,7 +14,9 @@ evaluateGammaExpressions <- function(regression, callingEnvironment, factorNumbe
   env$sdRatio <- env$dataSd / env$inputSd;
   
   loadConstants(env);
-  
+
+  # the checks would normally be in the validate function, but we need to know this before
+  # we can evaluate some subsequent expressions
   errorPrefix <- paste("Error applying prior to factor '",
                        getFactorNameForNumber(regression, factorNumber),
                        "': ", sep='');
@@ -27,6 +29,11 @@ evaluateGammaExpressions <- function(regression, callingEnvironment, factorNumbe
          prior$posteriorScale, "'.");
   }
   env$posteriorScale <- prior$posteriorScale;
+  
+  if (is.expression(prior$commonScale))
+    prior$commonScale <- eval(prior$commonScale, env);
+  if (is.logical(prior$commonScale))
+    prior$commonScale <- ifelse(prior$commonScale, COMMON_SCALE_TRUE_NAME, COMMON_SCALE_FALSE_NAME);
   
   if (is.expression(prior$shape))
     prior$shape <- eval(prior$shape, env);
@@ -60,6 +67,11 @@ evaluateInverseGammaExpressions <- function(regression, callingEnvironment, fact
          prior$posteriorScale, "'.");
   }
   env$posteriorScale <- prior$posteriorScale;
+
+  if (is.expression(prior$commonScale))
+    prior$commonScale <- eval(prior$commonScale, env);
+  if (is.logical(prior$commonScale))
+    prior$commonScale <- ifelse(prior$commonScale, COMMON_SCALE_TRUE_NAME, COMMON_SCALE_FALSE_NAME);
     
   if (is.expression(prior$shape))
     prior$shape <- eval(prior$shape, env);
@@ -80,6 +92,13 @@ evaluateWishartExpressions <- function(regression, callingEnvironment, factorNum
   env$inputSd <- getInputSdForFactor(regression, factorNumber);
   env$sdRatio <- env$dataSd / env$inputSd;
   env$factorDimension <- nrow(regression@ST[[factorNumber]]);
+
+  if (is.expression(prior$posteriorScale))
+    prior$posteriorScale <- eval(prior$posteriorScale, env);
+  if (is.expression(prior$commonScale))
+    prior$commonScale <- eval(prior$commonScale, env);
+  if (is.logical(prior$commonScale))
+    prior$commonScale <- ifelse(prior$commonScale, COMMON_SCALE_TRUE_NAME, COMMON_SCALE_FALSE_NAME);
   
   loadConstants(env);
   
@@ -102,6 +121,13 @@ evaluateInverseWishartExpressions <- function(regression, callingEnvironment, fa
   env$inputSd <- getInputSdForFactor(regression, factorNumber);
   env$sdRatio <- env$dataSd / env$inputSd;
   env$factorDimension <- nrow(regression@ST[[factorNumber]]);
+
+  if (is.expression(prior$posteriorScale))
+    prior$posteriorScale <- eval(prior$posteriorScale, env);
+  if (is.expression(prior$commonScale))
+    prior$commonScale <- eval(prior$commonScale, env);
+  if (is.logical(prior$commonScale))
+    prior$commonScale <- ifelse(prior$commonScale, COMMON_SCALE_TRUE_NAME, COMMON_SCALE_FALSE_NAME);
   
   loadConstants(env);
 

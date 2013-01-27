@@ -1,8 +1,19 @@
 # functions that the prior parser might call that don't influence the logic of the
 # of the parse
-getEnumOrder <- function(enumeration, name)
+getEnumOrder <- function(Enum, name)
 {
-  return (as.integer(which(enumeration == name) - 1));
+  return (as.integer(which(Enum == name) - 1L));
+}
+
+getScaleInt <- function(posteriorScale, commonScale) {
+  if (is.na(posteriorScale) || is.na(commonScale) ||
+      !is.numeric(posteriorScale) || !is.numeric(commonScale) ||
+      (posteriorScale != 0L && posteriorScale != 1L) ||
+      (commonScale != 0L && commonScale != 1L)) {
+    stop("blme internal error: getScaleInt called on non-binary inputs ('",
+         posteriorScale, "' and '", commonScale, "').");
+  }
+  return(.Call(bmer_getScaleInt, as.integer(posteriorScale), as.integer(commonScale)));
 }
 
 isDefaultSpecification <- function(specification) {
@@ -86,7 +97,7 @@ getInputSdForFactor <- function(regression, factorNumber)
         warning("Unable to standardize input '", predictorName,
                 "' for factor number ", factorNumber, ".");
       }
-      if (result[i] == 0) result[i] <- 1;
+      if (is.na(result[i]) || result[i] == 0) result[i] <- 1;
     }
   }
 
@@ -137,7 +148,7 @@ isLinearMixedModel <- function(regression) {
 }
 
 
-buildStringForFamily <- function(families, scales, hyperparameters, preprocessed)
+buildStringForFamily <- function(families, scales, hyperparameters, digits, preprocessed)
 {
   matchedCall <- match.call();
   
@@ -150,43 +161,59 @@ buildStringForFamily <- function(families, scales, hyperparameters, preprocessed
   stringConnection <- textConnection("stringResult", "w", local=TRUE);
   sink(stringConnection);
 
-  cat(familyEnumeration[families[1] + 1]);
+  cat(familyEnum[families[1] + 1]);
 
-  if (families[1] == getEnumOrder(familyEnumeration, GAMMA_FAMILY_NAME)) {
+  # TODO: make this not hard-coded; can't seem to find any bit-wise & or |
+  posteriorScale <- ifelse(scales[1] == 1 || scales[1] == 3, 1, 0) + 1;
+  commonScale    <- ifelse(scales[1] == 2 || scales[1] == 3, 1, 0) + 1;
+
+  if (families[1] == getEnumOrder(familyEnum, GAMMA_FAMILY_NAME)) {
+    hyperparameters <- round(hyperparameters, digits);
     cat("(", SHAPE_HYPERPARAMETER_NAME, " = ", hyperparameters[1],
         ", ", RATE_HYPERPARAMETER_NAME, " = ", hyperparameters[2],
-        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", scaleEnumeration[scales[1] + 1],
+        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", posteriorScaleEnum[posteriorScale],
+        ", ", COMMON_SCALE_OPTION_NAME, " = ", commonScaleEnum[commonScale],
         ")", sep="");
     numFamiliesUsed <- 1;
     numScalesUsed <- 1;
     numHyperparametersUsed <- 2;
-  } else if (families[1] == getEnumOrder(familyEnumeration, INVGAMMA_FAMILY_NAME)) {
+  } else if (families[1] == getEnumOrder(familyEnum, INVGAMMA_FAMILY_NAME)) {
+    hyperparameters <- round(hyperparameters, digits);
     cat("(", SHAPE_HYPERPARAMETER_NAME, " = ", hyperparameters[1],
         ", ", SCALE_HYPERPARAMETER_NAME, " = ", hyperparameters[2],
-        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", scaleEnumeration[scales[1] + 1],
+        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", posteriorScaleEnum[posteriorScale],
+        ", ", COMMON_SCALE_OPTION_NAME, " = ", commonScaleEnum[commonScale],
         ")", sep="");
     numFamiliesUsed <- 1;
     numScalesUsed <- 1;
     numHyperparametersUsed <- 2;
-  } else if (families[1] == getEnumOrder(familyEnumeration, WISHART_FAMILY_NAME)) {
+  } else if (families[1] == getEnumOrder(familyEnum, WISHART_FAMILY_NAME)) {
+    logScaleDet <- hyperparameters[2];
     scaleInverse <- hyperparameters[3:length(hyperparameters)];
+    hyperparameters <- round(hyperparameters, digits);
     levelDimension <- round(sqrt(length(scaleInverse)), digits=0);
     scaleInverse <- matrix(scaleInverse, levelDimension, levelDimension);
-    scale <- as.numeric(solve(scaleInverse));
     
+    if (is.finite(logScaleDet)) {
+      scale <- as.numeric(solve(scaleInverse));
+    } else {
+      scale <- matrix(Inf, levelDimension, levelDimension);
+    }
     
     cat("(", DEGREES_OF_FREEDOM_HYPERPARAMETER_NAME, " = ", hyperparameters[1], ", ",
         SCALE_HYPERPARAMETER_NAME, " = ", sep="");
     if (levelDimension == 1) {
-      cat(scale[1]);
+      cat(round(scale[1], digits));
     } else {
       if (levelDimension > 2)
-        cat("c(", toString(format(scale[1:4], digits=2, scientific=TRUE)), ", ...)", sep="")
+        cat("c(", toString(format(scale[1:4], digits=digits, scientific=TRUE)), ", ...)", sep="")
       else
-        cat("c(", toString(format(scale, digits=2, scientific=TRUE)), ")", sep="");
+        cat("c(", toString(format(scale, digits=digits, scientific=TRUE)), ")", sep="");
     }
+    cat(", ", COMMON_SCALE_OPTION_NAME, " = ", commonScaleEnum[commonScale], sep="");
     cat(")");
-  } else if (families[1] == getEnumOrder(familyEnumeration, INVWISHART_FAMILY_NAME)) {
+  } else if (families[1] == getEnumOrder(familyEnum, INVWISHART_FAMILY_NAME)) {
+    hyperparameters <- round(hyperparameters, digits);
     inverseScale <- hyperparameters[3:length(hyperparameters)];
     levelDimension <- round(sqrt(length(inverseScale)), digits=0);
     
@@ -196,12 +223,14 @@ buildStringForFamily <- function(families, scales, hyperparameters, preprocessed
       cat(inverseScale[1]);
     } else {
       if (levelDimension > 2)
-        cat("c(", toString(format(inverseScale[1:4], digits=2, scientific=TRUE)), ", ...)", sep="")
+        cat("c(", toString(format(inverseScale[1:4], digits=digits, scientific=TRUE)), ", ...)", sep="")
       else
-        cat("c(", toString(format(inverseScale, digits=2, scientific=TRUE)), ")", sep="");
+        cat("c(", toString(format(inverseScale, digits=digits, scientific=TRUE)), ")", sep="");
     }
+    cat(", ", COMMON_SCALE_OPTION_NAME, " = ", commonScaleEnum[commonScale], sep="");
     cat(")");
-  } else if (families[1] == getEnumOrder(familyEnumeration, NORMAL_FAMILY_NAME)) {
+  } else if (families[1] == getEnumOrder(familyEnum, NORMAL_FAMILY_NAME)) {
+    hyperparameters <- round(hyperparameters, digits);
     numParams <- length(hyperparameters);
     
     if (preprocessed) {
@@ -213,16 +242,18 @@ buildStringForFamily <- function(families, scales, hyperparameters, preprocessed
       cat(hyperparameters[1]);
     } else {
       if (numParams > 4)
-        cat("c(", toString(format(hyperparameters[1:4], digits=2, scientific=TRUE)), ", ...)", sep="")
+        cat("c(", toString(format(hyperparameters[1:4], digits=digits, scientific=TRUE)), ", ...)", sep="")
       else
-        cat("c(", toString(format(hyperparameters, digits=2, scientific=TRUE)), ")", sep="");
+        cat("c(", toString(format(hyperparameters, digits=digits, scientific=TRUE)), ")", sep="");
     }
+    cat(", ", COMMON_SCALE_OPTION_NAME, " = ", commonScaleEnum[commonScale], sep="");
     cat(")");
-  } else if (families[1] == getEnumOrder(familyEnumeration, POINT_FAMILY_NAME)) {
+  } else if (families[1] == getEnumOrder(familyEnum, POINT_FAMILY_NAME)) {
+    hyperparameters <- round(hyperparameters, digits);
     location <- hyperparameters;
 
     cat("(", VALUE_HYPERPARAMETER_NAME, " = ", hyperparameters,
-        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", scaleEnumeration[scales + 1],
+        ", ", POSTERIOR_SCALE_OPTION_NAME, " = ", posteriorScaleEnum[posteriorScale],
         ")", sep = "");
   }
   sink();

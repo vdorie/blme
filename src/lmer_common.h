@@ -27,20 +27,19 @@ getSparseContentAndStructure(const SEXP stExpression, const int *sparseRowForFac
  *
  * @return idnex of assicated factor
  */
-int getFactorForSparseRow(int row, int numFactors,
-                          const int *sparseRowsForFactor);
+int getFactorForSparseRow(int row, int numFactors, const int *sparseRowsForFactor);
 
 /**
- * Permute the vector src according to perm into dest
+ * Permute the vector source according to permutation into destination.
  *
- * @param dest destination
- * @param src source
- * @param perm NULL or 0-based permutation of length n
- * @param n length of src, dest and perm
+ * @param destination
+ * @param source
+ * @param permutation NULL or 0-based permutation of length numValues
+ * @param numValues length of source, destination and permutation (if not NULL).
  *
- * @return dest
+ * @return destination
  *
- * \note If perm is NULL the first n elements of src are copied to dest.
+ * \note If permutation is NULL the first numValues elements of source are copied to destination.
  */
 double*
 applyPermutation(double *destination, const double *source, const int *permutation, int numValues);

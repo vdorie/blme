@@ -1,25 +1,24 @@
-/* This file does:
- *   1) interchange of mer parameterizations between scales useful for
- *     a) evaluating priors
- *     b) assessing convergence
- *     c) the original ST form used by lmer, including:
- *        i) setting initial values for parameters from mer estimate in ST expression
- *       ii) updating ST expression from vector parameters
- *   2) evaluating priors
- *
- * To those ends, most of the code is about going between different parameterizations.
- * All of that should probably be moved elsewhere to streamline the "blmer" bit.
+#include "blmer.h"
+#include "__merCache.h"
+
+/* This file should be for
+ *   general support of lmer's innards
+ *   exported functions
+ * There's been some bleed through, obviously. Gotta work on that
  */
-#include <Rmath.h>               /* density functions */
+// #include <Rmath.h>               /* density functions */
 
 #include "lmer.h"
 #include "Syms.h"
-#include "blmer.h"
+
 #include "util.h"
-#include "wishart.h"
 #include "parameters.h"
 #include "covariancePrior.h"
 #include "unmodeledCoefficientPrior.h"
+#include "commonScalePrior.h"
+#include "lmer_common.h"
+#include "lmm.h"
+#include "glmm.h"
 
 #define MIN_PARAMETER    1.0e-10
 
@@ -39,14 +38,20 @@ static const char *priorFamilyAbbreviations[] = {
   "   1", "gamm", "igam", "wish", "iwsh", "nrml", " mvt", " pnt"
 };
 
-static const char *priorScaleNames[] = {
-  "sd", "var", "absolute", "common"
+static const char *priorPosteriorScaleNames[] = {
+  "sd", "var"
 };
+
+static const char *priorCommonScaleNames[] = {
+  "false", "true"
+};
+
+// static const char *priorScaleNames[] = {
+//   "sd", "var", "absolute", "common"
+// };
 
 
 // forward declarations
-int getNumCovarianceParametersForPrior(priorType_t priorType, int dim);
-
 void convertPriorToSDCorrelation(SEXP regression, const double *source, double *target);
 
 void copySTVectorToMatrix(const double *source, int dim, double *target);
@@ -88,32 +93,12 @@ void convertOptimizationParametersToConvergence(SEXP regression, const double *s
   convertPriorToSDCorrelation(regression, source, target);
 }
 
-int getNumCovarianceParametersForPrior(priorType_t priorType, int dim)
-{
-  switch (priorType) {
-    case PRIOR_TYPE_CORRELATION:
-      return (dim * (dim + 3) / 2);
-      break;
-    case PRIOR_TYPE_SPECTRAL:
-      return (dim * (dim + 1) / 2);
-      break;
-    case PRIOR_TYPE_DIRECT:
-      return (dim * (dim + 1) / 2);
-      break;
-    case PRIOR_TYPE_NONE:
-      return (dim * (dim + 1) / 2);
-    default:
-      return (0);
-      break;
-  }
-}
-
 void setBoxConstraints(SEXP regression, double *boxConstraints)
 {
   // we assume that we optimize on the scale in which we evaluate the prior,
   // as some of our priors are redundantly parameterized
   
-  int *dims = DIMS_SLOT(regression);
+  const int* dims = DIMS_SLOT(regression);
   SEXP stList = GET_SLOT(regression, lme4_STSym);
   SEXP priorList = GET_SLOT(regression, blme_covariancePriorSym);
   
@@ -121,7 +106,7 @@ void setBoxConstraints(SEXP regression, double *boxConstraints)
   int numParameters;
   
   for (int i = 0; i < numFactors; ++i) {
-    int levelDimension = *INTEGER(getAttrib(VECTOR_ELT(stList, i), R_DimSymbol));
+    int levelDimension = INTEGER(getAttrib(VECTOR_ELT(stList, i), R_DimSymbol))[0];
     SEXP prior_i = VECTOR_ELT(priorList, i);
     
     priorType_t priorType = PRIOR_TYPE_SLOT(prior_i);
@@ -130,7 +115,7 @@ void setBoxConstraints(SEXP regression, double *boxConstraints)
         
     boxConstraints += 2 * getNumCovarianceParametersForPrior(priorType, levelDimension);
     
-  } // level loop end
+  }
   
   if (parametersIncludeUnmodeledCoefs(regression)) {
     numParameters = dims[p_POS];
@@ -145,15 +130,15 @@ void setBoxConstraints(SEXP regression, double *boxConstraints)
   }
 }
 
-void initializeOptimizationParameters(SEXP regression, double *parameters) {
-  int *dims = DIMS_SLOT(regression);
+void copyParametersFromRegression(SEXP regression, double* parameters) {
+  const int* dims = DIMS_SLOT(regression);
   int numFactors = dims[nt_POS];
   SEXP priorList = GET_SLOT(regression, blme_covariancePriorSym);
   
   SEXP stList = GET_SLOT(regression, lme4_STSym);
   for (int i = 0; i < numFactors; ++i) {
     SEXP st_i = VECTOR_ELT(stList, i);
-    double *stMatrix = REAL(st_i);
+    double* stMatrix = REAL(st_i);
     int levelDimension = INTEGER(getAttrib(st_i, R_DimSymbol))[0];
     
     SEXP prior_i = VECTOR_ELT(priorList, i);
@@ -162,9 +147,8 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
     switch (priorType) {
       case PRIOR_TYPE_CORRELATION:
         {
-          double *stVector = Alloca(levelDimension * (levelDimension + 1) / 2, double);
-          R_CheckStack();
-    
+          double stVector[levelDimension * (levelDimension + 1) / 2];
+          
           copySTMatrixToVector(stMatrix, levelDimension, stVector);
           convertSTToPriorCorrelation(stVector, levelDimension, parameters);
         }
@@ -172,8 +156,7 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
         
       case PRIOR_TYPE_SPECTRAL:
         {
-          double *stVector = Alloca(levelDimension * (levelDimension + 1) / 2, double);
-          R_CheckStack();
+          double stVector[levelDimension * (levelDimension + 1) / 2];
           
           copySTMatrixToVector(stMatrix, levelDimension, stVector);
           convertSTToSpectral(stVector, levelDimension, parameters);
@@ -195,7 +178,7 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
   }
   
   if (parametersIncludeUnmodeledCoefs(regression)) {
-    double *unmodeledCoefficients = FIXEF_SLOT(regression);
+    double* unmodeledCoefficients = FIXEF_SLOT(regression);
     int numUnmodeledCoefficients = dims[p_POS];
     
     Memcpy(parameters, unmodeledCoefficients, numUnmodeledCoefficients);
@@ -205,6 +188,8 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
   if (parametersIncludeCommonScale(regression)) {
     *parameters++ = DEV_SLOT(regression)[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
   } else {
+    // what we need to stick somewhere is to insert the common scale for when
+    // the prior is fixed to a point. do that here
     SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
     priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
     
@@ -212,7 +197,8 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
         PRIOR_FAMILY_POINT == PRIOR_FAMILIES_SLOT(commonScalePrior)[0]) {
       double commonScale = PRIOR_HYPERPARAMETERS_SLOT(commonScalePrior)[0];
       
-      if (PRIOR_SCALES_SLOT(commonScalePrior)[0] == PRIOR_SCALE_VARIANCE) commonScale = sqrt(commonScale);
+      int priorScale = PRIOR_SCALES_SLOT(commonScalePrior)[0];
+      if (getPosteriorScaleBit(priorScale) == PRIOR_POSTERIOR_SCALE_SD) commonScale = sqrt(commonScale);
       
       double* dev = DEV_SLOT(regression);
       dev[sigmaML_POS] = dev[sigmaREML_POS] = commonScale;
@@ -221,10 +207,11 @@ void initializeOptimizationParameters(SEXP regression, double *parameters) {
 }
 
 // this should copy in the parameters from whatever form they're in into
-// the ST matrices (and fixef, if necessary). lmer also expects
-void updateRegressionWithParameters(SEXP regression, const double *parameters)
+// the ST matrices (and fixef, if necessary). basically the inverse
+// of the above
+void copyParametersIntoRegression(SEXP regression, const double *parameters)
 {
-  int *dims = DIMS_SLOT(regression);
+  const int* dims = DIMS_SLOT(regression);
   int numFactors = dims[nt_POS];
   
   SEXP priorList = GET_SLOT(regression, blme_covariancePriorSym);
@@ -415,7 +402,7 @@ void guaranteeValidPrior(SEXP regression)
 // For some models, we have to numerically optimize over the unmodeled
 // coefficients. This occurs if a) a glmm, b) the prior over the
 // unmodeled coefficients is not a gaussian with variance propto the
-// common scale factor
+// common scale factor (not yet implemented)
 int parametersIncludeUnmodeledCoefs(SEXP regression)
 {
   int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
@@ -424,11 +411,13 @@ int parametersIncludeUnmodeledCoefs(SEXP regression)
   return(FALSE); // for now, no linear model uses them
 }
 
+// not currently used, will potentially be required for non-conjugate
 int parametersIncludeCommonScale(SEXP regression)
 {
   return(FALSE);
 }
 
+/*
 int canProfileCommonScale(SEXP regression)
 {
   int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
@@ -450,12 +439,13 @@ int canProfileCommonScale(SEXP regression)
   if (priorType == PRIOR_TYPE_NONE) return(TRUE);
   
   if (priorType == PRIOR_TYPE_DIRECT) {
-    priorScale_t scale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
+    int scale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
     
-    if (scale == PRIOR_SCALE_COMMON) return(TRUE);
+    if (PRIOR_SCALE_COMMON(scale) == PRIOR_COMMON_SCALE_TRUE) return(TRUE);
   }
   return(FALSE);
 }
+
 
 int commonScaleRequiresOptimization(SEXP regression)
 {
@@ -466,10 +456,13 @@ int commonScaleRequiresOptimization(SEXP regression)
   priorType_t priorType = PRIOR_TYPE_SLOT(commonScalePrior);
   
   if (priorType == PRIOR_TYPE_DIRECT &&
-      PRIOR_FAMILIES_SLOT(commonScalePrior)[0] != PRIOR_FAMILY_INVGAMMA) {
-    // can only profile if is conjugate
-    return(FALSE);
+      PRIOR_FAMILIES_SLOT(commonScalePrior)[0] != PRIOR_FAMILY_INVGAMMA &&
+      PRIOR_FAMILIES_SLOT(commonScalePrior)[0] != PRIOR_FAMILY_POINT) {
+    // requires optimization if not conjugate and not a point
+    return(TRUE);
   }
+  
+  // at this point, prior, if it exists, is conjugate
   
   SEXP unmodeledCoefficientPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
   priorType = PRIOR_TYPE_SLOT(unmodeledCoefficientPrior);
@@ -477,23 +470,26 @@ int commonScaleRequiresOptimization(SEXP regression)
   if (priorType == PRIOR_TYPE_NONE) return(FALSE);
   
   if (priorType == PRIOR_TYPE_DIRECT) {
-    priorScale_t scale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
+    int scale = PRIOR_SCALES_SLOT(unmodeledCoefficientPrior)[0];
     
-    if (scale == PRIOR_SCALE_COMMON) return(FALSE);
+    if (PRIOR_SCALE_COMMON(scale) == PRIOR_COMMON_SCALE_TRUE) return(FALSE);
   }
   
   return(TRUE);
-}
+} */
 
 /**
  * If there are any priors, they're going to kick back and parameter
  * set that the optimizer chooses where a parameter is at the boundary.
  * This checks against that happening and we simply throw it back to
  * the optimizer.
+ *
+ * It should definitely be more specific and check that the parameter
+ * goes to 0 at 0.
  */
-int isAtBoundary(SEXP regression, double *parameters)
+int priorsProhibitParameters(SEXP regression, double *parameters)
 {
-  int *dims = DIMS_SLOT(regression);
+  const int* dims = DIMS_SLOT(regression);
   SEXP stList    = GET_SLOT(regression, lme4_STSym);
   SEXP priorList = GET_SLOT(regression, blme_covariancePriorSym);
   
@@ -529,67 +525,37 @@ int isAtBoundary(SEXP regression, double *parameters)
   return (FALSE);
 }
 
-/**
- * For each "level"/term/whatnot, calculate p(Sigma) for the specified
- * type and p(beta) or p(sigma.sq) if necessary.
- */
-double calculatePriorPenalty(SEXP regression, double *parameters)
+double getPriorPenalty(SEXP regression, MERCache* cache, const double* parameters)
 {
-  int *dims = DIMS_SLOT(regression);
-  SEXP stList = GET_SLOT(regression, lme4_STSym);
-  SEXP covariancePriorList = GET_SLOT(regression, blme_covariancePriorSym);
+  const int* dims = DIMS_SLOT(regression);
   
-  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression)); 
+  double deviance = cache->priorDevianceConstantPart;
+  
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  
+  int numParametersUsed = 0;
+  deviance   += getCovarianceDevianceVaryingPart(regression, parameters, &numParametersUsed);
+  parameters += numParametersUsed;
 
-  double *deviances = DEV_SLOT(regression); // need to use this to get common scale factor (sigma.sq)
-  double commonScale = 1.0;
-  if (isLinearModel) {
-    commonScale = deviances[dims[isREML_POS] ? sigmaREML_POS : sigmaML_POS];
-    commonScale *= commonScale; // stored as an sd, not a variance
-  }
-  
-  int numFactors = dims[nt_POS];
-  
-  double deviance = 0.0;
-  priorType_t priorType;
-  
-  for (int i = 0; i < numFactors; ++i) {
-    SEXP st_i    = VECTOR_ELT(stList, i);
-    SEXP prior_i = VECTOR_ELT(covariancePriorList, i);
-    
-    priorType = PRIOR_TYPE_SLOT(prior_i);
-    int levelDimension = INTEGER(getAttrib(st_i, R_DimSymbol))[0];
-    
-    deviance   += calculateCovarianceDeviance(prior_i, commonScale, parameters, levelDimension);
-    
-    parameters += getNumCovarianceParametersForPrior(priorType, levelDimension);
-  }
-  
   SEXP unmodeledCoefficientPrior = GET_SLOT(regression, blme_unmodeledCoefficientPriorSym);
-  priorType = PRIOR_TYPE_SLOT(unmodeledCoefficientPrior);
+  const double* unmodeledCoefficients = (isLinearModel ? FIXEF_SLOT(regression) : parameters);
+  int numUnmodeledCoefficients = dims[p_POS];
   
-  if (priorType == PRIOR_TYPE_DIRECT &&
-      parametersIncludeUnmodeledCoefs(regression))
-  {
-    int numUnmodeledCoefs = dims[p_POS];
-    deviance += calculateUnmodeledCoefficientDeviance(unmodeledCoefficientPrior, commonScale,
-                                                      parameters, numUnmodeledCoefs);
-    parameters += numUnmodeledCoefs;
-  }
-  
-  SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
-  priorType = PRIOR_TYPE_SLOT(commonScalePrior);
-  
-  if (priorType == PRIOR_TYPE_DIRECT &&
-      parametersIncludeCommonScale(regression))
-  {
-//    deviance += calclateCommonScaleDeviance(*parameters++, commonScalePrior);
+  if (isLinearModel) {
+    double commonScale = DEV_SLOT(regression)[isREML_POS ? sigmaREML_POS : sigmaML_POS];
+    commonScale *= commonScale;
+    
+    deviance += getUnmodeledCoefficientDevianceVaryingPart(unmodeledCoefficientPrior, commonScale, unmodeledCoefficients, numUnmodeledCoefficients);
+    
+    SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
+    deviance += getCommonScaleDevianceVaryingPart(commonScalePrior, commonScale);
+  } else {
+    deviance   += getUnmodeledCoefficientDevianceVaryingPart(unmodeledCoefficientPrior, 1.0, unmodeledCoefficients, numUnmodeledCoefficients);
+    parameters += numUnmodeledCoefficients;
   }
     
-  
   return (deviance);
 }
-
 
 SEXP bmer_getTypeEnumeration()
 {
@@ -618,12 +584,12 @@ SEXP bmer_getFamilyEnumeration()
   return (result);
 }
 
-SEXP bmer_getScaleEnumeration()
+SEXP bmer_getPosteriorScaleEnumeration()
 {
-  SEXP result = PROTECT(allocVector(STRSXP, PRIOR_SCALE_END - PRIOR_SCALE_SD));
+  SEXP result = PROTECT(allocVector(STRSXP, PRIOR_POSTERIOR_SCALE_END - PRIOR_POSTERIOR_SCALE_SD));
   
-  for (priorScale_t scale = PRIOR_SCALE_SD; scale < PRIOR_SCALE_END; ++scale) {
-    SET_STRING_ELT(result, (int) scale, mkChar(priorScaleNames[scale]));
+  for (priorPosteriorScale_t scale = PRIOR_POSTERIOR_SCALE_SD; scale < PRIOR_POSTERIOR_SCALE_END; ++scale) {
+    SET_STRING_ELT(result, (int) scale, mkChar(priorPosteriorScaleNames[scale]));
   }
   
   UNPROTECT(1);
@@ -631,15 +597,45 @@ SEXP bmer_getScaleEnumeration()
   return (result);
 }
 
-SEXP bmer_calculatePriorPenalty(SEXP regression)
+SEXP bmer_getCommonScaleEnumeration()
+{
+  SEXP result = PROTECT(allocVector(STRSXP, PRIOR_COMMON_SCALE_END - PRIOR_COMMON_SCALE_FALSE));
+  
+  for (priorCommonScale_t scale = PRIOR_COMMON_SCALE_FALSE; scale < PRIOR_COMMON_SCALE_END; ++scale) {
+    SET_STRING_ELT(result, (int) scale, mkChar(priorCommonScaleNames[scale]));
+  }
+  
+  UNPROTECT(1);
+  
+  return (result);
+}
+
+SEXP bmer_getScaleInt(SEXP posteriorScale, SEXP commonScale)
+{
+  int result = 0;
+  result |= INTEGER(posteriorScale)[0] * PRIOR_SCALE_POSTERIOR_MASK;
+  result |= INTEGER(commonScale)[0]    * PRIOR_SCALE_COMMON_MASK;
+  
+  return(ScalarInteger(result));
+}
+
+SEXP bmer_getPriorPenalty(SEXP regression)
 {
   int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
-  double *parameters = Alloca(numParameters, double);
+  double* parameters = Alloca(numParameters, double);
   R_CheckStack();
   
-  initializeOptimizationParameters(regression, parameters);
+  copyParametersFromRegression(regression, parameters);
   
-  return(ScalarReal(calculatePriorPenalty(regression, parameters)));
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  MERCache* cache = (isLinearModel ? createLMMCache(regression) : createGLMMCache(regression));
+  
+  double result = getPriorPenalty(regression, cache, parameters);
+  
+  if (isLinearModel) deleteLMMCache(cache);
+  else deleteGLMMCache(cache);
+  
+  return(ScalarReal(result));
 }
 
 
@@ -706,12 +702,18 @@ static void printFamilies(SEXP prior) {
 static void printScales(SEXP prior)
 {
   SEXP scalesExpression = GET_SLOT(prior, blme_prior_scalesSym);
-  priorScale_t *scales = (priorScale_t *) INTEGER(scalesExpression);
+  int* scales = INTEGER(scalesExpression);
   
   int numScales = LENGTH(scalesExpression);
   if (scales != NULL && numScales > 0) {
-    Rprintf("  scales    : %s", priorScaleNames[scales[0]]);
-    for (int j = 1; j < numScales; ++j) Rprintf(" %s", priorScaleNames[scales[j]]);
+    priorPosteriorScale_t posteriorScale = getPosteriorScaleBit(scales[0]);
+    priorCommonScale_t    commonScale    = getCommonScaleBit(scales[0]);
+    Rprintf("  scales    : (%s common: %s)", priorPosteriorScaleNames[posteriorScale], (commonScale == PRIOR_COMMON_SCALE_TRUE ? "T" : "F"));
+    for (int i = 1; i < numScales; ++i) {
+      posteriorScale = getPosteriorScaleBit(scales[i]);
+      commonScale    = getCommonScaleBit(scales[i]);
+      Rprintf(" (%s common: %s)", priorPosteriorScaleNames[posteriorScale], (commonScale == PRIOR_COMMON_SCALE_TRUE ? "T" : "F"));
+    }
     Rprintf("\n");
   } else {
     Rprintf("  scales    :\n");
@@ -766,4 +768,138 @@ void printAllPriors(SEXP regression)
   SEXP commonScalePrior = GET_SLOT(regression, blme_commonScalePriorSym);
   printPrior(commonScalePrior);
   Rprintf("\n");
+}
+
+
+// Externally callable. Sets up and fills a cache, then returns the computed
+// derivatives.
+//
+// Works on the **deviance** scale, so -2 * logLik.
+SEXP bmer_getCommonScaleDerivatives(SEXP regression) {
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  
+  if (!isLinearModel) return(ScalarReal(NA_REAL));
+  
+  MERCache* cache = createLMMCache(regression);
+  
+  int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
+  double parameters[numParameters];
+  
+  copyParametersFromRegression(regression, parameters);
+  
+  double firstDerivative;
+  double secondDerivative;
+  _getCommonScaleDerivatives(regression, cache, parameters, &firstDerivative, &secondDerivative);
+  
+  deleteLMMCache(cache);
+  SEXP resultExp = PROTECT(allocVector(REALSXP, 2));
+  double* result = REAL(resultExp);
+  result[0] = -2.0 * firstDerivative;
+  result[1] = -2.0 * secondDerivative;
+  UNPROTECT(1);
+  
+  return(resultExp);
+}
+
+/**
+ * Update the whole model for a new set of ST parameters.
+ * The only difference between this and a call to update_dev
+ * is that the A matrix is also modified. The main idea is that
+ * you can plug in your own ST (aka Sigma) matrices and get
+ * the objective function back out.
+ *
+ * @param regression a bmer object
+ *
+ * @return updated deviance
+ */
+// extern void printLMMCache(const MERCache* cache);
+SEXP bmer_getObjectiveFunction(SEXP regression)
+{
+  double result;
+  
+  int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
+  double parameters[numParameters];
+  
+  copyParametersFromRegression(regression, parameters);
+  
+  rotateSparseDesignMatrix(regression);
+  
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  
+  if (isLinearModel) {
+    MERCache* cache = createLMMCache(regression);
+    
+    result = lmmGetObjectiveFunction(regression, cache, parameters);
+    lmmFinalizeOptimization(regression, cache);
+    
+    // printLMMCache(cache);
+    
+    deleteLMMCache(cache);
+  } else {
+    MERCache* cache = createGLMMCache(regression);
+    
+    result  = REAL(mer_update_dev(regression))[0];
+    result += getPriorPenalty(regression, cache, parameters);
+    
+    deleteGLMMCache(cache);
+  }
+  
+  return(ScalarReal(result));
+}
+
+/**
+ * For whatever values of ST and sigma are stored in the model,
+ * propagate whatever changes are necessary to compute the deviance.
+ *
+ * @param regression a bmer object
+ *
+ * @return updated deviance
+ */
+SEXP bmer_getObjectiveFunctionForFixedCommonScale(SEXP regression)
+{
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  
+  if (!isLinearModel) error("Common scale not applicable for glmm or nlmm.");
+  
+  int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
+  double parameters[numParameters];
+  
+  copyParametersFromRegression(regression, parameters);
+  
+  MERCache* cache = createLMMCache(regression);
+  
+  SEXP result = ScalarReal(lmmGetObjectiveFunctionForFixedCommonScale(regression, cache, parameters));
+  lmmFinalizeOptimization(regression, cache);
+  
+  deleteLMMCache(cache);
+  return (result);
+}
+
+
+/**
+ * For whatever values of ST is stored in the model,
+ * propagate whatever changes are necessary to compute the maximizer in the
+ * common scale.
+ *
+ * @param regression a bmer object
+ *
+ * @return the new common scale
+ */
+SEXP bmer_getOptimalCommonScale(SEXP regression)
+{
+  int isLinearModel = !(MUETA_SLOT(regression) || V_SLOT(regression));
+  
+  if (!isLinearModel) error("Common scale not applicable for glmm or nlmm.");
+  
+  int numParameters = getNumParametersForParameterization(regression, PARAMETERIZATION_PRIOR);
+  double parameters[numParameters];
+  
+  copyParametersFromRegression(regression, parameters);
+  
+  MERCache* cache = createLMMCache(regression);
+  
+  SEXP result = ScalarReal(_getOptimalCommonScale(regression, cache, parameters));
+  
+  deleteLMMCache(cache);
+  return (result);
 }

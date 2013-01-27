@@ -319,7 +319,7 @@ getPriorFields <- function(factorDimension, priors, default)
 {
   families <- integer(length(priors));
   
-  numScales     <- 0;
+  numScales <- length(priors);
   numHyperparameters <- 0;
   matrixIndex   <- 0;   # as the matrix prior might not be last in the list, keep track
 
@@ -331,7 +331,6 @@ getPriorFields <- function(factorDimension, priors, default)
         priors[[i]]$family == INVGAMMA_FAMILY_NAME)
     {
       numHyperparameters <- numHyperparameters + 2;
-      numScales <- numScales + 1;
     } else if (priors[[i]]$family == WISHART_FAMILY_NAME ||
                priors[[i]]$family == INVWISHART_FAMILY_NAME)
     {
@@ -349,8 +348,10 @@ getPriorFields <- function(factorDimension, priors, default)
   for (i in 1:length(priors)) {
     if (i == matrixIndex) next;
     
-    families[familyIndex] <- getEnumOrder(familyEnumeration, priors[[i]]$family);
-    scales[familyIndex]   <- getEnumOrder(scaleEnumeration, priors[[i]]$posteriorScale);
+    families[familyIndex] <- getEnumOrder(familyEnum, priors[[i]]$family);
+    posteriorScale <- getEnumOrder(posteriorScaleEnum, priors[[i]]$posteriorScale);
+    commonScale    <- getEnumOrder(commonScaleEnum, priors[[i]]$commonScale);
+    scales[familyIndex] <- getScaleInt(posteriorScale, commonScale);
     if (priors[[i]]$family == GAMMA_FAMILY_NAME) {
       hyperparameters[hyperparameterIndex]     <- priors[[i]]$shape;
       hyperparameters[hyperparameterIndex + 1] <- priors[[i]]$rate;
@@ -364,6 +365,9 @@ getPriorFields <- function(factorDimension, priors, default)
   }
 
   if (matrixIndex > 0) {
+    posteriorScale <- getEnumOrder(posteriorScaleEnum, priors[[matrixIndex]]$posteriorScale);
+    commonScale    <- getEnumOrder(commonScaleEnum, priors[[matrixIndex]]$commonScale);
+    scales[matrixIndex] <- getScaleInt(posteriorScale, commonScale);
     # Order of wish parameters:
     #   df, log(det(scale)), scale
     # iwish is similar, but some inverses are required
@@ -377,12 +381,15 @@ getPriorFields <- function(factorDimension, priors, default)
       
       hyperparameters[hyperparameterIndex:(hyperparameterIndex + factorDimension * factorDimension - 1)] <-
         inverseScaleMatrix;
-      hyperparameterIndex <- hyperparameterIndex + factorDimension * factorDimension;
-      
+      hyperparameterIndex <- hyperparameterIndex + factorDimension * factorDimension;      
     } else if (priors[[matrixIndex]]$family == WISHART_FAMILY_NAME) {
       scaleMatrix <- priors[[matrixIndex]]$scale;
       logScaleDet <- determinant(scaleMatrix, logarithm=TRUE)$modulus;
-      scaleInverse <- as.vector(solve(scaleMatrix));
+      if (is.finite(logScaleDet)) {
+        scaleInverse <- as.vector(solve(scaleMatrix));
+      } else {
+        scaleInverse <- rep(0, length(scaleMatrix));
+      }
     
       hyperparameters[hyperparameterIndex] <- priors[[matrixIndex]]$degreesOfFreedom;
       hyperparameters[hyperparameterIndex + 1] <- logScaleDet;
@@ -393,7 +400,7 @@ getPriorFields <- function(factorDimension, priors, default)
       hyperparameterIndex <- hyperparameterIndex + factorDimension * factorDimension;
     }
       
-    families[familyIndex] <- getEnumOrder(familyEnumeration, priors[[matrixIndex]]$family);
+    families[familyIndex] <- getEnumOrder(familyEnum, priors[[matrixIndex]]$family);
     familyIndex <- familyIndex + 1;
   }
 
@@ -418,20 +425,20 @@ covariancePriorToString <- function(regression)
     scales <- prior@scales;
     hyperparameters <- prior@hyperparameters;
     
-    if (prior@type == getEnumOrder(typeEnumeration, NONE_TYPE_NAME)) next;
+    if (prior@type == getEnumOrder(typeEnum, NONE_TYPE_NAME)) next;
     
     cat(factorNames[i], "~ ");
     
-    if (prior@type == getEnumOrder(typeEnumeration, DIRECT_TYPE_NAME)) {
-      cat(buildStringForFamily(families, scales, hyperparameters, TRUE)$string,
+    if (prior@type == getEnumOrder(typeEnum, DIRECT_TYPE_NAME)) {
+      cat(buildStringForFamily(families, scales, hyperparameters, 2, TRUE)$string,
           "\n", sep = "");
-    } else if (prior@type == getEnumOrder(typeEnumeration, CORRELATION_TYPE_NAME)) {
+    } else if (prior@type == getEnumOrder(typeEnum, CORRELATION_TYPE_NAME)) {
       coordinateNames <- colnames(regression@ST[[i]]);
       
-      cat(typeEnumeration[prior@type + 1], "\n", sep = "");
+      cat(typeEnum[prior@type + 1], "\n", sep = "");
       
       for (j in 1:length(coordinateNames)) {
-        familyString <- buildStringForFamily(families, scales, hyperparameters, TRUE);
+        familyString <- buildStringForFamily(families, scales, hyperparameters, 2, TRUE);
         cat("  ", coordinateNames[j], " ~ ", stringResult$familyString, "\n", sep = "");
 
         families <- families[(familyString$numFamilies + 1):length(families)];
@@ -440,14 +447,14 @@ covariancePriorToString <- function(regression)
                                            length(hyperparameters)];
         
       }
-      cat("  ", buildStringForFamily(families, scales, hyperparameters, TRUE), "\n", sep="");
-    } else if (prior@type == getEnumOrder(typeEnumeration, SPECTRAL_TYPE_NAME)) {
+      cat("  ", buildStringForFamily(families, scales, hyperparameters, 2, TRUE), "\n", sep="");
+    } else if (prior@type == getEnumOrder(typeEnum, SPECTRAL_TYPE_NAME)) {
       coordinateNames <- colnames(regression@ST[[i]]);
       
-      cat(typeEnumeration[prior@type + 1], "\n", sep = "");
+      cat(typeEnum[prior@type + 1], "\n", sep = "");
       
       for (j in 1:length(coordinateNames)) {
-        familyString <- buildStringForFamily(families, scales, hyperparameters, TRUE);
+        familyString <- buildStringForFamily(families, scales, hyperparameters, 2, TRUE);
         cat("  ", j, " ~ ", familyString$string, "\n", sep = "");
         
         families <- families[(familyString$numFamilies + 1):length(families)];
