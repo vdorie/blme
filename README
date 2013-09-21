@@ -1,0 +1,50 @@
+News
+====
+With the update of lme4 to version 1.0 and the change of interals from BLAS/LAPACK to Eigen, blme has undergone a complete rewrite.
+
+Major changes:
+  Use of quotations around priors no longer necessary
+  No long automatically rescales priors to data. Rescaling your inputs is probably best policy
+
+Minor changes:
+  var.prior argument renamed to resid.prior
+  Can place priors on the square root of the random effect covariance
+  
+Previously, blme essentially reimplemented lme4 but with priors. The new version uses as much lme4 machinery as possible, with a few downstream impacts. Particularly:
+  Different optimizer means occasionally different results. Also can be a little slower
+  glmms now fit with adaptive Gaussian quadrature for greater accuracy
+
+
+Versioning
+==========
+The main branch of blme will go forward and depend on lme4 version 1.0. A legacy branch will also be provided on R-forge that is compatible with "lme4.0", called blme.0. This info applies until lme4 version 1.0 makes its way to CRAN, at which point using the latest versions should be hassle-free.
+
+Finally, a legacy build is available until the CRAN situation has been resolved. It is named "blme" and depends on lme4 for versions less than 1.
+
+Installation
+============
+To install the latest versions:
+  1) Install lme4 v1.0
+    1.0) Install appropriate developer tools for your platform. Consult http://cran.r-project.org/faqs.html
+    1.1) Install devtools package
+    1.2) Within R, execute
+      require("devtools"); install_github("lme4", user = "lme4", ref = "release")
+  2) Install blme v0.2
+    2.1) Within R, execute
+      install.packages("blme", repos = "http://R-Forge.R-project.org")
+
+To install legacy versions
+  1) Install lme4.0
+    1.1) Within R, execute
+      install.packages("lme4.0", repos = "http://R-Forge.R-project.org", type = "source")
+  2) Install blme.0
+    2.1) Within R, execute
+      install.packages("blme.0", repos = "http://R-Forge.R-project.org", type = "source")
+
+To install the legacy package
+  1) Install lme4 version, less than 1 (on CRAN)
+  2) Install blme legacy
+    2.1) Checkout blme legacy source by executing from a command line:
+      svn co svn://svn.R-Forge.R-project.org/svnroot/blme/legacy/blme
+    2.2) Within R, execute
+      install.packages("path/to/blme", repos = NULL, type = "source")

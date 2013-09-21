@@ -1,275 +1,279 @@
-blmer <-
-  function(formula, data, family = NULL, REML = TRUE,
-           control = list(), start = NULL, verbose = FALSE, doFit = TRUE,
-           subset, weights, na.action, offset, contrasts = NULL,
-           model = TRUE, x = TRUE, cov.prior = "wishart",
-           fixef.prior = "normal", var.prior = "inverse.gamma",
-           ...)
+## for R-check
+wishart <- "ignored";
+blmer <- function(formula, data = NULL, REML = TRUE,
+                  control = lmerControl(), start = NULL,
+                  verbose = 0L, subset, weights, na.action, offset,
+                  contrasts = NULL, devFunOnly = FALSE,
+                  cov.prior = wishart, fixef.prior = NULL,
+                  resid.prior = NULL,
+                  ...)
 {
-  mc <- match.call()
-  if (!is.null(family)) {             # call bglmer
-    mc[[1]] <- as.name("bglmer")
-    return(eval.parent(mc))
+  mc <- mcout <- match.call()
+  missCtrl <- missing(control)
+  missCovPrior <- missing(cov.prior)
+  ## see functions in modular.R for the body ...
+  if (!missCtrl && !inherits(control, "lmerControl")) {
+    if(!is.list(control)) stop("'control' is not a list; use lmerControl()")
+    ## back-compatibility kluge
+    warning("passing control as list is deprecated: please use lmerControl() instead",
+            immediate.=TRUE)
+    control <- do.call(lmerControl, control)
   }
-  stopifnot(length(formula <- as.formula(formula)) == 3)
+  if (!is.null(list(...)[["family"]])) {
+    warning("calling lmer with 'family' is deprecated; please use glmer() instead")
+    mc[[1]] <- quote(lme4::glmer)
+    if(missCtrl) mc$control <- glmerControl()
+    return(eval(mc, parent.frame(1L)))
+  }
+
+  fixef.prior <- mc$fixef.prior; ## for delayed evaluation
+  cov.prior <- if (!missCovPrior) mc$cov.prior else formals(blmer)$cov.prior;
+  resid.prior <- mc$resid.prior;
+  if (!is.null(mc$var.prior)) {
+    resid.prior <- parse(text = mc$var.prior)[[1]];
+  }
+  mc$fixef.prior <- NULL;
+  mc$cov.prior <- NULL;
+  mc$resid.prior <- NULL;
+  mc$var.prior <- NULL;
+
+  sigmaFixed <- !is.null(resid.prior) && (grepl("^\\W*point", resid.prior) || (is.call(resid.prior) && resid.prior[[1]] == "point"));
+  if (sigmaFixed) {
+    control$checkControl$check.nobs.vs.nlev <- "ignore";
+    control$checkControl$check.nobs.vs.rankZ <- "ignore";
+    control$checkControl$check.nobs.vs.nRE <- "ignore";
+  }
+  mc$control <- control ## update for  back-compatibility kluge
   
-  fr <- lmerFrames(mc, formula, contrasts) # model frame, X, etc.
-  FL <- lmerFactorList(formula, fr, rmInt=FALSE, drop=FALSE) # flist, Zt, dims
-  largs <- list(...)
-  if (!is.null(method <- list(...)$method)) {
-    warning(paste("Argument", sQuote("method"),
-                  "is deprecated.  Use", sQuote("REML"),
-                  "instead"))
-    REML <- match.arg(method, c("REML", "ML")) == "REML"
-    largs <- largs[names(largs) != "method"]
-  }
-  if (length(largs) > 0) {
-    warning("the following '...' arguments have  *not* been used: ",
-            sub("^list", "", deparse(largs, control=NULL)))
-  }
-  ### FIXME: issue a warning if the control argument has an msVerbose component
-  cv <- do.call(lmerControl, control)
-  if (missing(verbose)) verbose <- cv$msVerbose
-  FL$dims["LMM"] <- 1L
-  FL$dims["mxit"] <- cv$maxIter
-  FL$dims["mxfn"] <- cv$maxFN
+  ## https://github.com/lme4/lme4/issues/50
+  ## parse data and formula
+  mc[[1]] <- quote(lme4::lFormula)
+  lmod <- eval(mc, parent.frame(1L));
+  mcout$formula <- lmod$formula
+  lmod$formula <- NULL
+
+  lmerStart <- NULL;
+  if (!is.null(start) && is.list(start) && length(start) > 1)
+    lmerStart <- start$theta;
   
-  ans <- list(fr = fr, FL = FL, start = start, REML = REML,
-              verbose = verbose,
-              covariancePrior = cov.prior,
-              unmodeledCoefficientPrior = fixef.prior,
-              commonScalePrior = var.prior,
-              callingEnvironment = parent.frame());
+  devfun <- do.call(mkBlmerDevfun,
+                    c(lmod, lmod$X, lmod$reTrms,
+                      list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior, residPrior = resid.prior),
+                           start = lmerStart, verbose = verbose, control = control)));
+
+  if (devFunOnly) return(devfun);
   
-  if (doFit) {
-    ans <- do.call(blmer_finalize, ans)
-    ans@call <- mc
-  }
-  return(ans);
+  devFunEnv <- environment(devfun);
+  start <- getStartingValues(start, devFunEnv);
+
+  opt <- optimizeLmer(devfun,
+                      optimizer=control$optimizer,
+                      restart_edge=control$restart_edge,
+                      control=control$optCtrl,
+                      verbose=verbose,
+                      start=start)
+  result <- mkMerMod(devFunEnv, opt, lmod$reTrms, fr = lmod$fr, mcout) ## prepare output
+  
+  result <- repackageMerMod(result, opt, devFunEnv);
+
+  return(result);
 }
 
-bglmer <-
-function(formula, data, family = gaussian, start = NULL,
-         verbose = FALSE, nAGQ = 1, doFit = TRUE, subset, weights,
-         na.action, offset, contrasts = NULL, model = TRUE,
-         control = list(), cov.prior = "wishart",
-         fixef.prior = "normal",
-         ...)
-### Fit a generalized linear mixed model
+bglmer <- function(formula, data=NULL, family = gaussian,
+                  control = glmerControl(), start = NULL, verbose = 0L, nAGQ = 1L,
+                  subset, weights, na.action, offset,
+                  contrasts = NULL, mustart, etastart, devFunOnly = FALSE,
+                  cov.prior = wishart, fixef.prior = NULL,
+                  ...)
 {
-    mc <- match.call()
-    ## Evaluate and check the family [[hmm.. have  famType() for that ...]]
-    if(is.character(family))
-        family <- get(family, mode = "function", envir = parent.frame(2))
-    if(is.function(family)) family <- family()
-    if(!is.list(family) || is.null(family$family))
-      stop(gettextf("family '%s' not recognized", deparse(substitute(family)),
-                    domain = "R-lme4"))
-    if(family$family == "gaussian" && family$link == "identity") {
-        mc[[1]] <- as.name("blmer")      # use blmer not bglmer
-        mc$family <- NULL
-        return(eval.parent(mc))
-    }
-    stopifnot(length(formula <- as.formula(formula)) == 3)
-
-    ## Check for method argument which is no longer used
-    if (!is.null(method <- list(...)$method)) {
-        msg <- paste("Argument", sQuote("method"),
-                     "is deprecated.\nUse", sQuote("nAGQ"),
-                     "to choose AGQ.  PQL is not available.")
-        if (match.arg(method, c("Laplace", "AGQ")) == "Laplace") {
-            warning(msg)
-        } else stop(msg)
-    }
-
-    fr <- lmerFrames(mc, formula, contrasts) # model frame, X, etc.
-    offset <- wts <- NULL
-    if (length(fr$wts)) wts <- fr$wts
-    if (length(fr$off)) offset <- fr$off
-    glmFit <- glm.fit(fr$X, fr$Y, weights = wts, # glm on fixed effects
-                      offset = offset, family = family,
-                      intercept = attr(attr(fr$mf, "terms"), "intercept") > 0)
-    FL <- lmerFactorList(formula, fr, rmInt=FALSE, drop=FALSE) # flist, Zt, dims
+  missCovPrior <- missing(cov.prior);
+  if (!inherits(control, "glmerControl")) {
+    if(!is.list(control)) stop("'control' is not a list; use glmerControl()")
+    ## back-compatibility kluge
+    msg <- "Use control=glmerControl(..) instead of passing a list"
+    if(length(cl <- class(control))) msg <- paste(msg, "of class", dQuote(cl[1]))
+    warning(msg, immediate.=TRUE)
+    control <- do.call(glmerControl, control)
+  }
+  mc <- mcout <- match.call()
+  
+  fixef.prior <- mc$fixef.prior; ## for delayed evaluation
+  cov.prior <- if (!missCovPrior) mc$cov.prior else formals(bglmer)$cov.prior;
+  mc$fixef.prior <- NULL;
+  mc$cov.prior <- NULL;
+  
+  ## family-checking code duplicated here and in glFormula (for now) since
+  ## we really need to redirect at this point; eventually deprecate formally
+  ## and clean up
+  if (is.character(family))
+    family <- get(family, mode = "function", envir = parent.frame(2))
+  if( is.function(family)) family <- family()
+  if (isTRUE(all.equal(family, gaussian()))) {
+    ## redirect to lmer (with warning)
+    warning("calling glmer() with family=gaussian (identity link) as a shortcut to lmer() is deprecated;",
+            " please call lmer() directly")
+    mc[[1]] <- quote(lme4::lmer)
+    mc["family"] <- NULL            # to avoid an infinite loop
+    return(eval(mc, parent.frame()))
+  }
+  
+  ## see https://github.com/lme4/lme4/issues/50
+  ## parse the formula and data
+  mc[[1]] <- quote(lme4::glFormula)
+  glmod <- eval(mc, parent.frame(1L))
+  mcout$formula <- glmod$formula
+  glmod$formula <- NULL
+  
+  ## create deviance function for covariance parameters (theta)
+  
+  devfun <- do.call(mkBglmerDevfun, c(glmod, glmod$X, glmod$reTrms,
+                                      list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior),
+                                           verbose=verbose, control=control, nAGQ = 0)))
+  if (nAGQ==0 && devFunOnly) return(devfun)
+  ## optimize deviance function over covariance parameters
+  
+  if (is.list(start) && !is.null(start$fixef))
+    if (nAGQ==0) stop("should not specify both start$fixef and nAGQ==0")
+  
+  opt <- optimizeGlmer(devfun,
+                       optimizer = control$optimizer[[1]],
+                       restart_edge=control$restart_edge,
+                       control = control$optCtrl,
+                       start=start,
+                       nAGQ = 0,
+                       verbose=verbose)
+  
+  if(nAGQ > 0L) {
     
-### FIXME: issue a warning if the control argument has an msVerbose component
-    cv <- do.call(lmerControl, control)
-    if (missing(verbose)) verbose <- cv$msVerbose
-### FIXME: issue a warning if the model argument is FALSE.  It is ignored.
-    FL$dims["mxit"] <- cv$maxIter
-    FL$dims["mxfn"] <- cv$maxFN
+    start <- get("updateStart", asNamespace("lme4"))(start,theta=opt$par)
+    
+    ## update deviance function to include fixed effects as inputs
+    devfun <- updateBglmerDevfun(devfun, glmod$reTrms, nAGQ = nAGQ)
+    
+    if (devFunOnly) return(devfun)
+    ## reoptimize deviance function over covariance parameters and fixed effects
+    opt <- optimizeGlmer(devfun,
+                         optimizer = control$optimizer[[2]],
+                         restart_edge=control$restart_edge,
+                         control = control$optCtrl,
+                         start=start,
+                         nAGQ=nAGQ,
+                         verbose = verbose,
+                         stage=2)
+  }
+  ## prepare output
+  result <- mkMerMod(environment(devfun), opt, glmod$reTrms, fr = glmod$fr, mcout)
+  result <- repackageMerMod(result, opt, environment(devfun));
 
-    ans <- list(fr = fr, FL = FL, glmFit = glmFit, start = start,
-                nAGQ = nAGQ, verbose = verbose,
-                covariancePrior = cov.prior,
-                unmodeledCoefficientPrior = fixef.prior,
-                callingEnvironment = parent.frame());
-    if (doFit) {
-        ans <- do.call(bglmer_finalize, ans)
-        ans@call <- mc
+  return(result);
+}
+
+lmmObjective <- function(pp, resp, sigma, exponentialTerms, polynomialTerm, blmerControl) {
+  sigma.sq <- sigma^2;
+
+  result <- resp$objective(pp$ldL2(), pp$ldRX2(), pp$sqrL(1.0), sigma.sq);
+
+  exponentialTerm <- 0;
+  for (i in 1:length(exponentialTerms)) {
+    power <- as.numeric(names(exponentialTerms)[[i]]);
+    value <- exponentialTerms[[i]];
+    if (!is.finite(value)) return(value);
+    
+    exponentialTerm <- exponentialTerm + value * sigma^power;
+  }
+
+  priorPenalty <- exponentialTerm + polynomialTerm + blmerControl$constant + blmerControl$df * log(sigma.sq);
+  
+  result <- result + priorPenalty;
+
+  return(result);
+}
+
+repackageMerMod <- function(merMod, opt, devFunEnv) {
+  isLMM <- is(merMod, "lmerMod");
+
+  if (isLMM)
+    expandPars(opt$par, devFunEnv$pars);
+
+  blmerControl <- devFunEnv$blmerControl;
+  priors <- devFunEnv$priors;
+  
+  beta <- if (isLMM) merMod@pp$beta(1.0) else merMod@beta;
+  Lambda.ts <- getCovBlocks(merMod@pp$Lambdat, blmerControl$ranefStructure);
+  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts);
+
+  if (isLMM) {
+    if (!is.null(exponentialTerms[["-2"]]))
+      merMod@devcomp$cmp[["pwrss"]] <- merMod@devcomp$cmp[["pwrss"]] + as.numeric(exponentialTerms[["-2"]]);
+  
+    ## recover sigma
+    sigmaOptimizationType <- blmerControl$sigmaOptimizationType;
+    if (sigmaOptimizationType == SIGMA_OPTIM_POINT) {
+      sigma <- priors$residPrior@value;
+    } else if (sigmaOptimizationType != SIGMA_OPTIM_NUMERIC) {
+      profileSigma <- getSigmaProfiler(priors, blmerControl);
+      sigma <- profileSigma(merMod@pp, merMod@resp, exponentialTerms, blmerControl);
     }
-    ans
-}
+    ## set sigma in final object
+    numObs   <- merMod@devcomp$dims[["n"]];
+    numFixef <- merMod@devcomp$dims[["p"]];
+    if (merMod@devcomp$dims[["REML"]] > 0L) {
+      merMod@devcomp$cmp[["sigmaREML"]] <- sigma;
+      merMod@devcomp$cmp[["sigmaML"]] <- sigma * sqrt((numObs - numFixef) / numObs);
+    } else {
+      merMod@devcomp$cmp[["sigmaML"]] <- sigma;
+      merMod@devcomp$cmp[["sigmaREML"]] <- sigma * sqrt(numObs / (numObs - numFixef));
+    }
+    
+    objectiveValue <- merMod@resp$objective(merMod@pp$ldL2(), merMod@pp$ldRX2(), merMod@pp$sqrL(1.0), sigma^2);
+    if (merMod@devcomp$dims[["REML"]] > 0L) {
+      priorPenalty <- merMod@devcomp$cmp[["REML"]] - objectiveValue;
+      merMod@devcomp$cmp[["REML"]] <- objectiveValue;
+    } else {
+      priorPenalty <- merMod@devcomp$cmp[["dev"]] - objectiveValue;
+      merMod@devcomp$cmp[["dev"]] <- objectiveValue;
+    }
+    merMod@devcomp$cmp[["penalty"]] <- priorPenalty;
 
-blmer_finalize <- function(fr, FL, start, REML, verbose,
-                           covariancePrior, unmodeledCoefficientPrior,
-                           commonScalePrior, callingEnvironment)
-{
-  Y <- as.double(fr$Y)
-  if (is.list(start) && all(sort(names(start)) == sort(names(FL))))
-    start <- list(ST = start)
-  if (is.numeric(start)) start <- list(STpars = start)
-  dm <- mkZt(FL, start[["ST"]])
-  
-  dm$dd["REML"] <- as.logical(REML)
-  dm$dd["verb"] <- as.integer(verbose)
-  swts <- sqrt(unname(fr$wts))
-  p <- dm$dd["p"]
-  n <- length(Y)
-  
-  ans <- new(Class = "bmer",
-             env = new.env(),
-             nlmodel = (~I(x))[[2]],
-             frame = fr$mf,
-             call = call("foo"),      # later overwritten
-             flist = dm$flist,
-             X = fr$X,
-             Zt = dm$Zt,
-             pWt = unname(fr$wts),
-             offset = unname(fr$off),
-### FIXME: Should y retain its names? As it stands any row names in the
-### frame are dropped.  Really?  Are they part of the frame slot (if not
-### reduced to 0 rows)?
-             y = unname(Y),
-             Gp = unname(dm$Gp),
-             dims = dm$dd,
-             ST = dm$ST,
-             A = dm$A,
-             Cm = dm$Cm,
-             Cx = if (length(swts) > 0) (dm$A)@x else numeric(0),
-             L = dm$L,
-             deviance = dm$dev,
-             fixef = fr$fixef,
-             ranef = numeric(dm$dd[["q"]]),
-             u = numeric(dm$dd[["q"]]),
-             eta = numeric(n),
-             mu = numeric(n),
-             resid = numeric(n),
-             sqrtrWt = swts,
-             sqrtXWt = as.matrix(swts),
-             RZX = matrix(0, dm$dd[["q"]], p),
-             RX = matrix(0, p, p),
-             cov.prior = list(),
-             fixef.prior = createFlatPriorObject(),
-             var.prior = createFlatPriorObject())
-  if (!is.null(stp <- start$STpars) && is.numeric(stp)) {
-    STp <- .Call(mer_ST_getPars, ans)
-    if (length(STp) == length(stp))
-      .Call(mer_ST_setPars, ans, stp)
+    return(new("blmerMod",
+               resp    = merMod@resp,
+               Gp      = merMod@Gp,
+               call    = merMod@call,
+               frame   = merMod@frame,
+               flist   = merMod@flist,
+               cnms    = merMod@cnms,
+               lower   = merMod@lower,
+               theta   = merMod@theta,
+               beta    = merMod@beta,
+               u       = merMod@u,
+               devcomp = merMod@devcomp,
+               pp      = merMod@pp,
+               optinfo = merMod@optinfo,
+               priors  = priors));
+  } else {
+    if (length(exponentialTerms) > 0)
+      priorPenalty <- exponentialTerms[[1]] + calculatePriorPolynomialTerm(priors$covPriors, Lambda.ts) + blmerControl$constant
+    else
+      priorPenalty <- 0;
+    merMod@devcomp$cmp[["dev"]] <- merMod@devcomp$cmp[["dev"]] - priorPenalty;
+    merMod@devcomp$cmp[["penalty"]] <- priorPenalty;
+
+    return(new("bglmerMod",
+               resp    = merMod@resp,
+               Gp      = merMod@Gp,
+               call    = merMod@call,
+               frame   = merMod@frame,
+               flist   = merMod@flist,
+               cnms    = merMod@cnms,
+               lower   = merMod@lower,
+               theta   = merMod@theta,
+               beta    = merMod@beta,
+               u       = merMod@u,
+               devcomp = merMod@devcomp,
+               pp      = merMod@pp,
+               optinfo = merMod@optinfo,
+               priors  = priors));
   }
-
-  ans <- setPrior(ans, covariancePrior, unmodeledCoefficientPrior,
-                  commonScalePrior, callingEnvironment);
-
-  ### This checks that the number of levels in a grouping factor < n
-  ### Only need to check the first factor because it is the one with
-  ### the most levels.
-  #
-  # blme edit:
-  # if the common scale is fixed, can work with num groups = n
-  numGroups <- length(levels(dm$flist[[1]]));
-  numObserv <- length(Y);
-  if (numGroups >= numObserv) {
-    if (numGroups > numObserv ||
-        (ans@var.prior@type == getEnumOrder(typeEnum, DIRECT_TYPE_NAME) &&
-         ans@var.prior@families[1] != getEnumOrder(familyEnum, POINT_FAMILY_NAME)))
-      stop(paste("Number of levels of a grouping factor for the random effects",
-                 "must be less than the number of observations", sep = "\n"))
-  }
-  
-  return(mer_finalize(ans));
-}
-
-bglmer_finalize <- function(fr, FL, glmFit, start, nAGQ, verbose,
-                            covariancePrior, unmodeledCoefficientPrior,
-                            callingEnvironment)
-{
-  if (is.list(start) && all(sort(names(start)) == sort(names(FL))))
-    start <- list(ST = start)
-  if (is.numeric(start)) start <- list(STpars = start)
-  dm <- mkZt(FL, start[["ST"]])
-  ft <- famType(glmFit$family)
-  dm$dd[names(ft)] <- ft
-  useSc <- as.integer(!(famNms[dm$dd[["fTyp"]]] %in%
-                        c("binomial", "poisson")))
-  dm$dd["useSc"] <- useSc
-  ## Only need to check the first factor because it is the one with
-  ## the most levels.
-  M1 <- length(levels(dm$flist[[1]]))
-  n <- ncol(dm$Zt)
-  if (M1 >= n) {
-    msg1 <- "Number of levels of a grouping factor for the random effects\n"
-    msg3 <- "n, the number of observations"
-    if (useSc)
-      stop(msg1, "must be less than ", msg3)
-    else if (M1 == n)
-      message(msg1, "is *equal* to ", msg3)
-  }
-  if ((nAGQ <- as.integer(nAGQ)) < 1) nAGQ <- 1L
-  if (nAGQ %% 2 == 0) nAGQ <- nAGQ + 1L # reset nAGQ to be an odd number
-  dm$dd[["nAGQ"]] <- as.integer(nAGQ)
-  AGQlist <- .Call(lme4_ghq, nAGQ)
-  y <- unname(as.double(glmFit$y))
-  ##    dimnames(fr$X) <- NULL
-  p <- dm$dd[["p"]]
-  dm$dd["verb"] <- as.integer(verbose)
-  fixef <- fr$fixef
-  fixef[] <- coef(glmFit)
-  if (!is.null(ff <- start$fixef) && is.numeric(ff) &&
-      length(ff) == length(fixef)) fixef <- ff
-
-  ans <- new(Class = "bmer",
-             env = new.env(),
-             nlmodel = (~I(x))[[2]],
-             frame = fr$mf,
-             call = call("foo"),      # later overwritten
-             flist = dm$flist,
-             Zt = dm$Zt, X = fr$X, y = y,
-             pWt = unname(glmFit$prior.weights),
-             offset = unname(fr$off),
-             Gp = unname(dm$Gp),
-             dims = dm$dd, ST = dm$ST, A = dm$A,
-             Cm = dm$Cm, Cx = (dm$A)@x, L = dm$L,
-             deviance = dm$dev,
-             fixef = fixef,
-             ranef = numeric(dm$dd[["q"]]),
-             u = numeric(dm$dd[["q"]]),
-             eta = unname(glmFit$linear.predictors),
-             mu = unname(glmFit$fitted.values),
-             muEta = numeric(dm$dd[["n"]]),
-             var = numeric(dm$dd[["n"]]),
-             resid = unname(glmFit$residuals),
-             sqrtXWt = as.matrix(numeric(dm$dd[["n"]])),
-             sqrtrWt = numeric(dm$dd[["n"]]),
-             RZX = matrix(0, dm$dd[["q"]], p),
-             RX = matrix(0, p, p),
-             ghx = AGQlist[[1]],
-             ghw = AGQlist[[2]],
-             cov.prior = list(),
-             fixef.prior = createFlatPriorObject(),
-             var.prior = createFlatPriorObject());
-  if (!is.null(stp <- start$STpars) && is.numeric(stp)) {
-    STp <- .Call(mer_ST_getPars, ans)
-    if (length(STp) == length(stp))
-      .Call(mer_ST_setPars, ans, stp)
-  }
-
-  ans <- setPrior(ans,
-                  covariancePrior,
-                  unmodeledCoefficientPrior,
-                  NULL,
-                  callingEnvironment);
-  
-  return (mer_finalize(ans));
 }
 
 validateRegressionArgument <- function(regression, regressionName) {
@@ -277,53 +281,65 @@ validateRegressionArgument <- function(regression, regressionName) {
   
   # check for existence and null-ness
   if (is.null(regression)) stop("object '", regressionName, "' is null.");
-  if (!inherits(regression, "bmer")) stop("object '", regressionName, "' does not inherit from S4 class 'bmer'.");
+  if (!is(regression, "bmerMod")) stop("object '", regressionName, "' does not inherit from S4 class 'bmerMod'.");
 }
 
 setPrior <- function(regression, cov.prior = NULL,
-                     fixef.prior = NULL, var.prior = NULL, env = parent.frame())
+                     fixef.prior = NULL, resid.prior = NULL, envir = parent.frame(1L), ...)
 {
+  matchedCall <- match.call();
+
   covMissing   <- missing(cov.prior);
   fixefMissing <- missing(fixef.prior);
-  varMissing   <- missing(var.prior);
+  residMissing <- missing(resid.prior);
   
-  validateRegressionArgument(regression, match.call()$regression);
+  validateRegressionArgument(regression, matchedCall$regression);
   
-  if (is.na(regression@deviance[["sigmaREML"]])) regression@deviance[["sigmaREML"]] <- 1.0;
-  if (is.na(regression@deviance[["sigmaML"]])) regression@deviance[["sigmaML"]] <- 1.0;
+  if (residMissing && !is.null(matchedCall$var.prior)) {
+    matchedCall$resid.prior <- matchedCall$var.prior;
+    residMissing <- FALSE;
+  }
+
+  priors <- evaluatePriorArguments(matchedCall$cov.prior, matchedCall$fixef.prior, matchedCall$resid.prior,
+                                   regression@devcomp$dim, regression@cnms, envir);
+
+  if (!covMissing) regression@covPriors <- priors$covPriors;
+  if (!fixefMissing) regression@fixefPrior <- priors$fixefPrior;
+  if (!residMissing) regression@residPrior <- priors$residPrior;
   
-  if (!covMissing) {
-    if (is.null(cov.prior)) cov.prior <- "none";
-    regression@cov.prior <- parseCovariancePriorSpecification(regression, cov.prior, env);
-  }
-  if (!fixefMissing) {
-    if (is.null(fixef.prior)) fixef.prior <- "none";
-    regression@fixef.prior <- parseUnmodeledCoefficientPriorSpecification(regression, fixef.prior, env);
-  }
-  if (!varMissing) {
-    if (is.null(var.prior)) var.prior <- "none";
-    regression@var.prior <- parseCommonScalePriorSpecification(regression, var.prior, env);
-  }
   return (regression);
 }
 
 parsePrior <- function(regression, cov.prior = NULL,
-                       fixef.prior = NULL, var.prior = NULL, env = parent.frame())
+                       fixef.prior = NULL, resid.prior = NULL, envir = parent.frame(), ...)
 {
-  validateRegressionArgument(regression, match.call()$regression);
+  matchedCall <- match.call();
+
+  covMissing   <- missing(cov.prior);
+  fixefMissing <- missing(fixef.prior);
+  residMissing <- missing(resid.prior);
   
-  if (!is.null(cov.prior)) {
-    return (parseCovariancePriorSpecification(regression, cov.prior, env));
+  validateRegressionArgument(regression, matchedCall$regression);
+  
+  if (residMissing && !is.null(matchedCall$var.prior)) {
+    matchedCall$resid.prior <- matchedCall$var.prior;
+    residMissing <- FALSE;
   }
-  if (!is.null(fixef.prior)) {
-    return (parseUnmodeledCoefficientPriorSpecification(regression, fixef.prior, env));
-  }
-  if (!is.null(var.prior)) {
-    return (parseCommonScalePriorSpecification(regression, var.prior, env));
-  }
+
+  priors <- evaluatePriorArguments(matchedCall$cov.prior, matchedCall$fixef.prior, matchedCall$resid.prior,
+                                   regression@devcomp$dim, regression@cnms, envir);
+
+  result <- list();
+  if (!covMissing) result$covPriors <- priors$covPriors;
+  if (!fixefMissing) result$fixefPrior <- priors$fixefPrior;
+  if (!residMissing) result$residPrior <- priors$residPrior;
+
+  if (length(result) == 1) return(result[[1]]);
+  return(result);
 }
 
-runOptimizer <- function(regression, verbose=FALSE)
+if (FALSE) {
+runOptimizer <- function(regression, verbose = FALSE)
 {
   validateRegressionArgument(regression, match.call()$regression);
   
@@ -337,45 +353,12 @@ runOptimizer <- function(regression, verbose=FALSE)
 
 runOptimizerWithPrior <- function(regression, cov.prior = NULL,
                                   fixef.prior = NULL, var.prior = NULL,
-                                  verbose = FALSE, env = parent.frame())
+                                  verbose = FALSE, envir = parent.frame())
 {
   validateRegressionArgument(regression, match.call()$regression);
   
-  regression <- setPrior(regression, cov.prior, fixef.prior, var.prior, env);
+  regression <- setPrior(regression, cov.prior, fixef.prior, var.prior, envir);
   
   return(runOptimizer(regression, verbose));
 }
-
-getObjectiveFunction <- function(regression)
-{
-  validateRegressionArgument(regression, match.call()$regression);
-  
-  return (.Call(bmer_getObjectiveFunction, regression));
-}
-
-getObjectiveFunctionForFixedCommonScale <- function(regression)
-{
-  validateRegressionArgument(regression, match.call()$regression);
-  
-  return (.Call(bmer_getObjectiveFunctionForFixedCommonScale, regression));
-}
-
-getOptimalCommonScale <- function(regression)
-{
-  validateRegressionArgument(regression, match.call()$regression);
-
-  return(.Call(bmer_getOptimalCommonScale, regression));
-}
-
-getCommonScaleDerivatives <- function(regression)
-{
-  validateRegressionArgument(regression, match.call()$regression);
-  
-  return (.Call(bmer_getCommonScaleDerivatives, regression));
-}
-
-getPriorPenalty <- function(regression) {
-  validateRegressionArgument(regression, match.call()$regression);
-
-  return(.Call(bmer_getPriorPenalty, regression));
 }

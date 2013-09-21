@@ -10,11 +10,11 @@ if(require("RUnit", quietly=TRUE)) {
   if(Sys.getenv("RCMDCHECK") == "FALSE") {
     ## Path to unit tests for standalone running under Makefile (not R CMD check)
     ## PKG/tests/../inst/unitTests
-    path <- file.path(getwd(), "..", "inst", "unitTests")
+    path <- file.path(getwd(), "..", "inst", "tests")
   } else {
     ## Path to unit tests for R CMD check
     ## PKG.Rcheck/tests/../PKG/unitTests
-    path <- system.file(package=pkg, "unitTests")
+    path <- system.file(package=pkg, "tests")
   }
   cat("\nRunning unit tests\n")
   print(list(pkg=pkg, getwd=getwd(), pathToUnitTests=path))
