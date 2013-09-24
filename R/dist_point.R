@@ -1,5 +1,6 @@
-setClass("bmerPointDist", contains = "bmerDist",
-         slots = c(value = "numeric"));
+setClass("bmerPointDist",
+         representation(value = "numeric"),
+         contains = "bmerDist");
 
 toString.bmerPointDist <- function(x, digits = getOption("digits"), ...)
   paste("point(value = ", round(x@value, digits), ")", sep = "");

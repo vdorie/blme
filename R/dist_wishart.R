@@ -1,15 +1,17 @@
-setClass("bmerWishartDist", contains = "bmerDist",
-         slots = c(df          = "numeric",
-                   R.scale.inv = "matrix",
-                   log.det.scale = "numeric",
-                   posteriorScale = "character"),
+setClass("bmerWishartDist",
+         representation(df          = "numeric",
+                        R.scale.inv = "matrix",
+                        log.det.scale = "numeric",
+                        posteriorScale = "character"),
+         contains = "bmerDist",
          validity = function(object) object@posteriorScale == "cov" || object@posteriorScale == "sqrt");
 
-setClass("bmerInvWishartDist", contains = "bmerDist",
-         slots = c(df      = "numeric",
-                   R.scale = "matrix",
-                   log.det.scale = "numeric",
-                   posteriorScale = "character"),
+setClass("bmerInvWishartDist",
+         representation(df      = "numeric",
+                        R.scale = "matrix",
+                        log.det.scale = "numeric",
+                        posteriorScale = "character"),
+         contains = "bmerDist",
          validity = function(object) object@posteriorScale == "cov" || object@posteriorScale == "sqrt");
 
 toString.bmerWishartDist <- function(x, digits = getOption("digits"), ...) {

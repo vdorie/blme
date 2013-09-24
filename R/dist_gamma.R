@@ -1,12 +1,14 @@
-setClass("bmerGammaDist", contains = "bmerDist",
-         slots = c(shape = "numeric",
-                   rate  = "numeric",
-                   posteriorScale = "character"),
+setClass("bmerGammaDist",
+         representation(shape = "numeric",
+                        rate  = "numeric",
+                        posteriorScale = "character"),
+         contains = "bmerDist",
          validity = function(object) object@posteriorScale == "var" || object@posteriorScale == "sd");
-setClass("bmerInvGammaDist", contains = "bmerDist",
-         slots = c(shape = "numeric",
-                   scale = "numeric",
-                   posteriorScale = "character"),
+setClass("bmerInvGammaDist",
+         representation(shape = "numeric",
+                        scale = "numeric",
+                        posteriorScale = "character"),
+         contains = "bmerDist",
          validity = function(object) object@posteriorScale == "var" || object@posteriorScale == "sd");
 
 toString.bmerGammaDist <- function(x, digits = getOption("digits"), includeCommonScale = TRUE, ...) {

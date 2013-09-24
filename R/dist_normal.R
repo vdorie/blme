@@ -1,5 +1,6 @@
-setClass("bmerNormalDist", contains = "bmerDist",
-         slots = c(R.cov.inv = "matrix"));
+setClass("bmerNormalDist",
+         representation(R.cov.inv = "matrix"),
+         contains = "bmerDist");
 
 toString.bmerNormalDist <- function(x, digits = getOption("digits"), ...) {
   cov <- solve(tcrossprod(x@R.cov.inv));

@@ -1,5 +1,5 @@
-setClass("bmerDist", contains = "VIRTUAL",
-         slots = c(commonScale = "logical"));
+setClass("bmerDist", representation(commonScale = "logical"),
+         contains = "VIRTUAL");
 
 if (!isGeneric("getDFAdjustment"))
   setGeneric("getDFAdjustment", function(object, ...) standardGeneric("getDFAdjustment"));
