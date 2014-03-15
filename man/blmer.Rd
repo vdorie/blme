@@ -28,14 +28,18 @@ bglmer(formula, data, family = gaussian,
     \code{invgamma}, or \code{NULL}. Imposes a prior over the covariance of the random
     effects/modeled coefficients. Default is \code{wishart}. The \code{NULL} argument
     imposes flat priors over all relevant parameters.}
-  \item{fixef.prior}{a BLME prior of family \code{normal} or \code{NULL}.
+  \item{fixef.prior}{a BLME prior of family \code{normal}, \code{t}, or \code{NULL}.
     Imposes a prior over the fixed effects/modeled coefficients.
     Default is \code{NULL}.}
   \item{resid.prior}{a BLME prior of family \code{gamma}, \code{invamma}, \code{point}
     or \code{NULL}. Imposes a prior over the noise/residual variance, also known as common scale
     parameter or the conditional variance given the random effects.
     Default is \code{NULL}.}
-  \item{formula, data, REML, family, control, start, verbose, nAGQ,
+  \item{start}{like the \code{start} arguments for \code{\link[lme4]{lmer}} and
+    \code{\link[lme4]{glmer}} a numeric vector or named list. Unlike the aforementioned,
+    list members of \code{fixef} and \code{sigma} are applicable to linear mixed models
+    provided that numeric optimization is required for these parameters.}
+  \item{formula, data, REML, family, control, verbose, nAGQ,
     mustart, etastart, devFunOnly, \dots}{model specification arguments as in \code{\link[lme4]{lmer}} and \code{\link[lme4]{glmer}};
     see there for details.}
   \item{subset, weights, na.action, offset, contrasts}{further model
@@ -48,8 +52,9 @@ bglmer(formula, data, family = gaussian,
   \code{\link[lme4]{glmer}}. Those help pages provide a good overview of
   fitting linear and generalized linear mixed models. The primary
   distinction is that \code{blmer} and \code{bglmer} allow the user to
-  do Bayesian inference, with priors imposed on the different
-  model components.
+  do Bayesian inference or penalized maximum likelihood, with priors imposed on the different
+  model components. For the specifics of any distribution listed below,
+  see the \link[=bmerDist-class]{distributions} page.
   
   \strong{Covariance Prior}
   
@@ -64,8 +69,8 @@ bglmer(formula, data, family = gaussian,
   for such a prior are of the form:
 
 \itemize{
-  \item \code{cov.prior = factor.name ~ variance.distribution(option1 = value1, \dots)}
-  \item \code{cov.prior = list(fc.nm ~ dist1, default.distribution)}
+  \item \code{cov.prior = factor.name ~ covariance.distribution(option1 = value1, \dots)}
+  \item \code{cov.prior = list(fc.nm ~ dist1, fc.nm ~ dist2, ..., default.distribution)}
 }
   
   If the \dQuote{\code{factor.name ~}} construct is ommitted, the prior
@@ -74,12 +79,12 @@ bglmer(formula, data, family = gaussian,
   but permit fine-tuning of the model.
 
   Supported distributions are \code{gamma}, \code{invgamma}, \code{wishart},
-  \code{invwishart}, and \code{NULL}.
+  \code{invwishart}, \code{NULL}, and \code{custom}.
 
   The \code{common.scale} option, a logical, determines whether or
-  not the prior is assumed to be given in an absolute-real world
-  sense (value = \code{FALSE}), or if the prior is rescaled by the
-  estimated variance of the data (\code{TRUE}). As a practical matter,
+  not the prior applies to in the absolute-real world
+  sense (value = \code{FALSE}), or if the prior is applied to the random effect
+  covariance divided by the estimated residual variance (\code{TRUE}). As a practical matter,
   when false computation can be slower as the profiled common scale may
   no longer have a closed-form solution. As such, the default for all
   cases is \code{TRUE}.
@@ -91,18 +96,18 @@ bglmer(formula, data, family = gaussian,
   
   Priors on the fixed effects, or unmodeled coefficients, are specified
   in a fashion similar to that of covariance priors. The general format is
-  
 
 \itemize{\item \code{fixef.prior = multivariate.distribution(options1 = value1, \dots)}}
   
-  At present, the only implemented multivariate distributions are \code{normal}
-  and \code{NULL}.
+  At present, the implemented multivariate distributions are \code{normal}, \code{t},
+  and \code{NULL}. \code{t} priors cannot be used when \code{REML} is \code{TRUE},
+  as that integral does not have a closed form solution.
 
   \strong{Residual Variance Prior}
 
   The general format for a residual variance prior is the same as for a fixed
   effect prior. The supported distributions are \code{point}, \code{gamma},
-  \code{invgamma} - Options are \code{shape}, \code{scale}, and \code{NULL}.
+  \code{invgamma}.
 
 }
 \value{
@@ -124,23 +129,30 @@ bglmer(formula, data, family = gaussian,
 (fm4 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior = invwishart(df = 5, scale = diag(0.5, 2))))
 
+##  custom prior
+penaltyFn <- function(sigma)
+  dcauchy(sigma, 0, 10, log = TRUE)
+(fm5 <- blmer(Reaction ~ Days + (0 + Days|Subject), sleepstudy,
+              cov.prior = custom(penaltyFn, chol = TRUE, scale = "log")))
+
+
 ##  fixed effect prior
-(fm5 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
+(fm6 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior = NULL,
               fixef.prior = normal))
-(fm6 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
+(fm7 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior = NULL,
               fixef.prior = normal(cov = diag(0.5, 2), common.scale = FALSE)))
 
-##  common scale prior
-##    eight schools example
-  y <- c(28, 8, -3, 7, -1, 1, 18, 12);
-  sigma <- c(15, 10, 16, 11, 9, 11, 10, 18);
-  y.z <- (y - mean(y)) / sigma;
-  g <- 1:8
+##  residual variance prior
+##  eight schools example
+y <- c(28, 8, -3, 7, -1, 1, 18, 12);
+sigma <- c(15, 10, 16, 11, 9, 11, 10, 18);
+g <- 1:8;
   
-  (schools <- blmer(y.z ~ 1 + (1 | g), resid.prior = point,
-                   cov.prior = NULL));
+(schools <- blmer(y ~ 1 + (1 | g), resid.prior = point,
+                  cov.prior = NULL, REML = FALSE,
+                  weights = 1 / sigma^2));
 }
 \keyword{models}
 \keyword{methods}

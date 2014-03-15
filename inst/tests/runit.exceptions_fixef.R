@@ -20,4 +20,11 @@ test.blme.parsePrior.cov.prior.exceptions <- function()
   checkException(parsePrior(fit, fixef.prior = "normal(cov = negDefiniteMatrix)"));
   asymmetricMatrix <- matrix(c(1, 0.5, 0.3, 0.7), 2, 2);
   checkException(parsePrior(fit, fixef.prior = "normal(cov = asymmetricMatrix)"));
+
+  checkException(parsePrior(fit, fixef.prior = "t"))
+
+  fit <- blmer(y ~ x.1 + (1 | g.1), testData, REML = FALSE,
+               cov.prior = NULL, fixef.prior = NULL, resid.prior = NULL);
+  checkException(parsePrior(fit, fixef.prior = "t(df = 0)"));
+  checkException(parsePrior(fit, fixef.prior = "t(scale = c(-1, 2))"));
 }

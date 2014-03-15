@@ -12,17 +12,18 @@
   model that represent the type of prior being applied.}
 
 \section{Objects from the Class}{Objects can be created by calls of the
-  form \code{new("bmerPrior", ...)}  or, more commonly, via the
-  \code{\link{blmer}} or \code{\link{bglmer}} functions.
+  form \code{new("bmerPrior", ...)}  or, more commonly, as side effects of the
+  \code{\link{blmer}} and \code{\link{bglmer}} functions.
 
   When using the main \code{blme} functions, the prior-related arguments can be
   passed what essentially
   are function calls with the distinction that they are delayed in evaluation
   until information about the model is available. At that time, the functions
-  are defined in a special environment and then evaluated in the calling
-  environment. This is reflected in the prototypes of various prior-creating
-  functions which depend on parameters not available in the top-level
-  environment.
+  are \emph{defined} in a special environment and then \emph{evaluated} in an
+  environment that directly inherits form the one in which \code{blmer} or
+  \code{bglmer} was called. This is reflected in some of the
+  prototypes of various prior-creating functions which depend on parameters not
+  available in the top-level environment.
 
   Finally, if the trailing parentheses are omitted from a \code{blmer}/\code{bglmer}
   prior argument, they are simply added as a form of \dQuote{syntactic sugar}.
@@ -37,12 +38,13 @@
   \itemize{
     \item \code{normal(sd = c(10, 2.5), cov, common.scale = TRUE)}
     
-    Applies to \code{fixef.prior} argument. Gaussian prior for the fixed
-    effects are currently constrained to have a mean of 0. The covariance
-    can be specified either as a vector of standard deviations, using the 
-    \code{sd} argument, a vector of variances using the \code{cov} argument,
-    or the entire variance/covariance matrix itself. When specifying standard
-    deviations, a vector of length less than the number of fixed effects will
+    Applies a Gaussian prior to the fixed effects. Normal priors are constrained
+    to have a mean of 0 - non-zero priors are equivalent to shifting covariates.
+
+    The covariance hyperparameter can be specified either as a vector of standard
+    deviations, using the \code{sd} argument, a vector of variances using the
+    \code{cov} argument, or the entire variance/covariance matrix itself. When
+    specifying standard deviations, a vector of length less than the number of fixed effects will
     have its tail repeated, while the first element is assumed to apply only
     to the intercept term. So in the default of \code{c(10, 2.5)}, the intercept
     receives a standard deviation of 10 and the various slopes are all given
@@ -51,7 +53,24 @@
     The \code{common.scale} argument specifies whether or not the
     prior is to be interpretted as being on the same scale as the residuals.
     To specify a prior in an absolute sense, set to \code{FALSE}. Argument
-    is only present for linear mixed models.
+    is only applicable to linear mixed models.
+
+    \item \code{t(df = 3, scale = c(10^2, 2.5^2), common.scale = TRUE)}
+    
+    The degrees of freedom - \code{df} argument - must be positive. If \code{scale} is
+    of length 1, it is repeated along the diagonal for every component. Length 2 repeats
+    just the second element for all slopes. Length equal to the number of fixed effects
+    sees the vector simply turned into a diagonal matrix. Finally, it can a full scale matrix,
+    so long as it is positive definite.
+
+    \code{t} priors for linear mixed models require that the fixed effects be added to
+    set of parameters that are numerically optimized, and thus can substantially
+    increase running time. In addition, when \code{common.scale} is \code{TRUE}, the
+    residual variance must be numerically optimized as well. \code{normal} priors
+    on the common scale can be fully profiled and do not suffer from this drawback.
+
+    At present, \code{t} priors cannot be used with the \code{REML = TRUE} argument
+    as that implies an integral without a closed form solution.
   }
 
   \strong{Covariance Priors}
@@ -83,6 +102,18 @@
 
    A scale of \code{0} or a shape of \code{0} imposes an improper prior. The behavior
    for singular matrices with only some zero eigenvalues is undefined.
+
+   \item \code{custom(fn, chol = FALSE, common.scale = TRUE, scale = "none")}
+
+   Applies to the given function (\code{fn}). If \code{chol} is \code{TRUE}, \code{fn} is
+   passed a \emph{right} factor of covariance matrix; \code{FALSE} results in the matrix being
+   passed directly. \code{scale} can be \code{"none"}, \code{"log"}, or \code{"dev"} corresponding to
+   \eqn{p(\Sigma)}, \eqn{\log p(\Sigma)}{log p(\Sigma)}, and \eqn{-2 \log p(\Sigma)}{-2 log p(\Sigma)}
+   respectively.
+
+   Since the prior is may have an arbitrary form, setting \code{common.scale} to \code{FALSE}
+   for a linear mixed model means that full profiling may no longer be possible. As such,
+   that parameter is numerically optimized.
   }
 
   \strong{Residual Variance Priors}
@@ -103,11 +134,12 @@
 }
 
 \section{Evaluating Environment}{
-  The variables that the evaluating environment have populated are:
+  The variables that the defining environment have populated are:
   \itemize{
     \item \code{p} aliased to \code{n.fixef} - the number of fixed effects
     \item \code{n} aliased to \code{n.obs} - the number of observations
-    \item \code{level.dim} - for covariance priors, the dimension of the grouping factor/grouping level
+    \item \code{q.k} aliased to \code{level.dim} - for covariance priors, the dimension of the grouping factor/grouping level
+    \item \code{j.k} aliased to \code{n.grps} - also for covariance priors, the number of groups that comprise a specific grouping factor
   }
 }
 

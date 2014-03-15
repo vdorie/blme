@@ -1,6 +1,6 @@
 cat("\n\nRUnit test cases for bmer::blmer function with priors on the common scale/residual variance\n\n");
 
-test.bmer.blmer.varPrior <- function()
+test.bmer.blmer.residPrior <- function()
 { 
   # eight schools
   y <- c(28, 8, -3, 7, -1, 1, 18, 12);
@@ -13,12 +13,12 @@ test.bmer.blmer.varPrior <- function()
   eightSchools <- blmer(y.z ~ 1 + (1 | g), resid.prior = point,
                         cov.prior = NULL, fixef.prior = NULL);
 
-  checkEquals(eightSchools@pp$theta, 0);
+  checkEquals(eightSchools@theta, 0, tolerance = 1.0e-7);
 
   
   source(system.file("common", "lmmData.R", package = "blme"));
   
-  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData,
+  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, control = lmerControl(optimizer = "bobyqa"),
                cov.prior = NULL, resid.prior = invgamma(2, 1.0));
-  checkEquals(fit@pp$theta, c(0.720574821837846, -0.327950819407575, 1.48817902720885, 0.891726847920311, 0.314716339964349, -0.17288554050559, 1.02649696723723, 0.118403717814748, 0.205106180826464));
+  checkEquals(fit@pp$theta, c(0.725321928185923, -0.251272308917427, 1.5828609906233, 0.946932542474828, 0.467970716580088, -0.183212783510381, 1.07158442297183, 0.122067368879505, 0.223238050522642), tolerance = 1.0e-6);
 }

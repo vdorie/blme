@@ -22,9 +22,9 @@ setMethod("getExponentialTerm", "ANY", function(object, ...) c(0, 0));
 setMethod("getPolynomialTerm", "ANY", function(object, ...) 0);
           
 
-fixefDistributions <- c("flat", "normal");
+fixefDistributions <- c("flat", "normal", "t");
 covDistributions   <- c("flat", "wishart", "invwishart",
-                        "gamma", "invgamma");
+                        "gamma", "invgamma", "custom");
 residDistributions <- c("flat", "gamma", "invgamma", "point");
 
 lmmDistributions <- list(
@@ -64,6 +64,32 @@ lmmDistributions <- list(
       stop("normal prior covariance negative semi-definite");
     
     return(new("bmerNormalDist", commonScale = common.scale, R.cov.inv = solve(chol(cov))));
+  },
+  t = function(df = 3, scale = c(10^2, 2.5^2), common.scale = TRUE) {
+    matchedCall <- match.call();
+    if (!is.null(matchedCall$df)) df <- eval(matchedCall$df);
+    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale);
+    common.scale <- blme:::deparseCommonScale(common.scale);
+
+    if (df <= 0) stop("t prior requires positive degrees of freedom")
+
+    if (length(scale) == 1) {
+      scale <- diag(scale, p);
+    } else if (length(scale) == 2) {
+      scale <- diag(scale[c(1, rep(2, p - 1))], p);
+    } else if (length(scale) == p) {
+      scale <- diag(scale, p);
+    } else if (length(scale) != p^2) {
+      stop("t prior scale of improper length");
+    }
+
+    if (any(scale != base::t(scale))) stop("t scale not symmetric");
+    
+    logDet <- determinant(scale, TRUE);
+    if (logDet$sign < 0 || is.infinite(logDet$modulus))
+      stop("t prior scale negative semi-definite");
+    
+    return(new("bmerTDist", commonScale = common.scale, df = df, R.scale.inv = solve(chol(scale))));
   },
   gamma = function(shape = 2.5, rate = 0, common.scale = TRUE, posterior.scale = "sd") {
     matchedCall <- match.call();
@@ -192,6 +218,16 @@ lmmDistributions <- list(
     if (value <= 0) stop("residual variance must be positive");
     
     return(new("bmerPointDist", commonScale = FALSE, value = value));
+  },
+  custom = function(fn, chol = FALSE, common.scale = TRUE, scale = "none") {
+    matchedCall <- match.call();
+    
+    if (!is.null(matchedCall$chol)) chol <- eval(matchedCall$chol);
+    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale);
+    common.scale <- blme:::deparseCommonScale(common.scale);
+
+    return(new("bmerCustomDist", fnName = matchedCall$fn, fn = fn,
+               chol = chol, scale = scale, commonScale = common.scale));
   }
 );
 
@@ -213,26 +249,41 @@ glmmDistributions <- list(
 
     return(normal(sd = sd, common.scale = FALSE));
   },
+  t = function(df = 5, scale = c(10^2, 2.5^2)) {
+    t <- blme:::lmmDistributions$t;
+    environment(t) <- environment();
+        
+    matchedCall <- match.call();
+    if (!is.null(matchedCall$df)) df <- eval(matchedCall$df);
+    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale);
+    
+    t(df = df, scale = scale, common.scale = FALSE);
+  },
   gamma = function(shape = 2.5, rate = 0, posterior.scale = "sd") {
     gamma <- blme:::lmmDistributions$gamma;
     environment(gamma) <- environment();
-    gamma(shape, rate, FALSE, posterior.scale); 
+    gamma(shape, rate, TRUE, posterior.scale); 
   },
   invgamma = function(shape = 0.5, scale = 10^2, posterior.scale = "sd") {
     invgamma <- blme:::lmmDistributions$invgamma;
     environment(invgamma) <- environment();
-    invgamma(shape, scale, FALSE, posterior.scale);
+    invgamma(shape, scale, TRUE, posterior.scale);
   },
   wishart = function(df = level.dim + 2.5, scale = Inf, common.scale = TRUE, posterior.scale = "cov") {
     wishart <- blme:::lmmDistributions$wishart;
     environment(wishart) <- environment();
-    wishart(df, scale, FALSE, posterior.scale);
+    wishart(df, scale, TRUE, posterior.scale);
   },
   invwishart = function(df = level.dim - 0.5, scale = diag(10^2 / (df + level.dim + 1), level.dim),
                         common.scale = TRUE, posterior.scale = "cov") {
     invwishart <- blme:::lmmDistributions$invwishart;
     environment(invwishart) <- environment();
-    invwishart(df, scale, FALSE, posterior.scale);
+    invwishart(df, scale, TRUE, posterior.scale);
+  },
+  custom = function(fn, chol = FALSE, scale = "none") {
+    custom <- blme:::lmmDistributions$custom;
+    environment(custom) <- environment();
+    custom(fn, chol, scale, TRUE);
   }
 );
 

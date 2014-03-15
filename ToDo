@@ -1,10 +1,8 @@
 High Priority:
   sim for ranef covariance
-  Allow arbitrary priors so long as well formed
 
 Medium Priority:
-  t-priors on fixef
-  Consider optimal scaling for random effect covariances
+  investigate overdispersed models
 
 Low Priority:
-  Fixef priots with non-zero mean
+  Consider optimal scaling for random effect covariances

@@ -24,16 +24,15 @@ Finally, a legacy build is available until the CRAN situation has been resolved.
 Installation
 ============
 To install the latest versions:
-  1) Install lme4 v1.0
-    1.0) Install appropriate developer tools for your platform. Consult http://cran.r-project.org/faqs.html
-    1.1) Install devtools package
-    1.2) Within R, execute
-      require("devtools"); install_github("lme4", user = "lme4", ref = "release")
-  2) Install blme v0.2
+  1) Install lme4 v1.0 or greater
+    1.0) Within R, execute
+      install.packages("lme4")
+  2) Install blme v1.0 or greater
     2.1) Within R, execute
-      install.packages("blme", repos = "http://R-Forge.R-project.org")
+      install.packages("blme")
 
 To install legacy versions
+  0) Install appropriate developer tools for your platform. Consult http://cran.r-project.org/faqs.html
   1) Install lme4.0
     1.1) Within R, execute
       install.packages("lme4.0", repos = "http://R-Forge.R-project.org", type = "source")

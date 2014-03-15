@@ -6,28 +6,42 @@ cat("\n\nRUnit test cases for blme::bglmer function\n\n");
 test.blme.bglmer <- function()
 {
   source(system.file("common", "glmmData.R", package = "blme"));
+
+  control <- glmerControl(optimizer = "Nelder_Mead");
+  lme4IsOld <- compareVersion(toString(packageVersion("lme4")), "1.1-4") < 0
   
-   glmerFit <-  glmer(y ~ x.1 + x.2 + (1 | g), testData, family=binomial());
-  bglmerFit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family=binomial(),
+   glmerFit <-  glmer(y ~ x.1 + x.2 + (1 | g), testData, family=binomial(), control = control);
+  bglmerFit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family=binomial(), control = control,
                       cov.prior = NULL);
   
   checkEquals(glmerFit@theta, bglmerFit@theta);
   checkEquals(glmerFit@beta, bglmerFit@beta);
   checkEquals(glmerFit@u, bglmerFit@u);
 
-  fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(),
+  fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), control = control,
                 cov.prior = wishart);
-  checkEquals(fit@theta, 2.96766646709572);
-  checkEquals(fit@beta, c(1.09637901132068, 3.67790597689351, 1.75655015184474));
+  if (lme4IsOld) {
+    checkEquals(fit@theta, 2.96766525351892);
+    checkEquals(fit@beta, c(1.0963789854971, 3.67790570859986, 1.75655010020603));
+  } else {
+    checkEquals(fit@theta, 2.96767284827046);
+    checkEquals(fit@beta, c(1.0963789854971, 3.67790570859986, 1.75655010020603));
+  }
 
-  fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(),
+  fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), control = control,
                 cov.prior = NULL, fixef.prior = normal);
-  checkEquals(fit@theta, 1.26502084999465);
-  checkEquals(fit@beta, c(0.873134542930456, 2.46647593503492, 1.32070300707973));
+  if (lme4IsOld) {
+    checkEquals(fit@theta, 1.26501253837861);
+    checkEquals(fit@beta, c(0.873121247636467, 2.46647249930796, 1.32070156863358));
+  } else {
+    checkEquals(fit@theta, 1.26501385482573);
+    checkEquals(fit@beta, c(0.873131216784199, 2.46647899095567, 1.32070496549675));
+  }
 
   RUnitOptions <- getOption("RUnit");
   RUnitOptions$silent <- TRUE;
   options("RUnit" = RUnitOptions);
   
   checkException(blme:::parsePrior(bglmerFit, fixef.prior = normal(common.scale = TRUE)));
+  checkException(blme:::parsePrior(bglmerFit, fixef.prior = t(common.scale = TRUE)));
 }

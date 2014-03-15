@@ -26,19 +26,19 @@ blmer <- function(formula, data = NULL, REML = TRUE,
     return(eval(mc, parent.frame(1L)))
   }
 
-  fixef.prior <- mc$fixef.prior; ## for delayed evaluation
+  fixef.prior <- mc$fixef.prior; ## for delayed evaluation, get quoted versions
   cov.prior <- if (!missCovPrior) mc$cov.prior else formals(blmer)$cov.prior;
   resid.prior <- mc$resid.prior;
-  if (!is.null(mc$var.prior)) {
-    resid.prior <- parse(text = mc$var.prior)[[1]];
-  }
+  if (!is.null(mc$var.prior)) resid.prior <- parse(text = mc$var.prior)[[1]];
   mc$fixef.prior <- NULL;
   mc$cov.prior <- NULL;
   mc$resid.prior <- NULL;
   mc$var.prior <- NULL;
-
-  sigmaFixed <- !is.null(resid.prior) && (grepl("^\\W*point", resid.prior) || (is.call(resid.prior) && resid.prior[[1]] == "point"));
-  if (sigmaFixed) {
+  
+  sigmaIsFixed <-
+    !is.null(resid.prior) && (grepl("^\\W*point", resid.prior) || (is.call(resid.prior) && resid.prior[[1]] == "point"));
+  
+  if (sigmaIsFixed) {
     control$checkControl$check.nobs.vs.nlev <- "ignore";
     control$checkControl$check.nobs.vs.rankZ <- "ignore";
     control$checkControl$check.nobs.vs.nRE <- "ignore";
@@ -52,6 +52,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   mcout$formula <- lmod$formula
   lmod$formula <- NULL
 
+  ## peel off the starting values lmer stuff expects to see
   lmerStart <- NULL;
   if (!is.null(start) && is.list(start) && length(start) > 1)
     lmerStart <- start$theta;
@@ -60,33 +61,46 @@ blmer <- function(formula, data = NULL, REML = TRUE,
                     c(lmod, lmod$X, lmod$reTrms,
                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior, residPrior = resid.prior),
                            start = lmerStart, verbose = verbose, control = control)));
-
+  
   if (devFunOnly) return(devfun);
   
   devFunEnv <- environment(devfun);
-  start <- getStartingValues(start, devFunEnv);
+  ## start <- getStartingValues(start, devFunEnv);
 
   opt <- optimizeLmer(devfun,
                       optimizer=control$optimizer,
                       restart_edge=control$restart_edge,
                       control=control$optCtrl,
                       verbose=verbose,
-                      start=start)
-  result <- mkMerMod(devFunEnv, opt, lmod$reTrms, fr = lmod$fr, mcout) ## prepare output
-  
-  result <- repackageMerMod(result, opt, devFunEnv);
+                      start=start,
+                      boundary.tol=control$boundary.tol,
+                      calc.derivs=control$calc.derivs,
+                      use.last.params=control$use.last.params)
+  cc <- NULL;
+  lme4Env <- asNamespace("lme4");
+  if (exists("checkConv", lme4Env)) {
+    cc <- get("checkConv", lme4Env)(attr(opt,"derivs"),opt$par,
+                                    ctrl = control$checkConv,
+                                    lbound=environment(devfun)$lower)
+  }
 
+  args <- list(rho = devFunEnv, opt = opt, reTrms = lmod$reTrms, fr = lmod$fr, mc = mcout);
+  if (!is.null(formals(mkMerMod)$lme4conv)) args$lme4conv <- cc;
+  result <- do.call("mkMerMod", args, TRUE, sys.frame(0));
+  result <- repackageMerMod(result, opt, devFunEnv);
+  
   return(result);
 }
 
 bglmer <- function(formula, data=NULL, family = gaussian,
-                  control = glmerControl(), start = NULL, verbose = 0L, nAGQ = 1L,
-                  subset, weights, na.action, offset,
-                  contrasts = NULL, mustart, etastart, devFunOnly = FALSE,
-                  cov.prior = wishart, fixef.prior = NULL,
-                  ...)
+                   control = glmerControl(), start = NULL, verbose = 0L, nAGQ = 1L,
+                   subset, weights, na.action, offset,
+                   contrasts = NULL, mustart, etastart, devFunOnly = FALSE,
+                   cov.prior = wishart, fixef.prior = NULL,
+                   ...)
 {
-  missCovPrior <- missing(cov.prior);
+  covPriorMissing <- missing(cov.prior);
+  
   if (!inherits(control, "glmerControl")) {
     if(!is.list(control)) stop("'control' is not a list; use glmerControl()")
     ## back-compatibility kluge
@@ -97,8 +111,8 @@ bglmer <- function(formula, data=NULL, family = gaussian,
   }
   mc <- mcout <- match.call()
   
-  fixef.prior <- mc$fixef.prior; ## for delayed evaluation
-  cov.prior <- if (!missCovPrior) mc$cov.prior else formals(bglmer)$cov.prior;
+  fixef.prior <- mc$fixef.prior; ## for delayed evaluation, store as quoted
+  cov.prior <- if (!covPriorMissing) mc$cov.prior else formals(bglmer)$cov.prior;
   mc$fixef.prior <- NULL;
   mc$cov.prior <- NULL;
   
@@ -128,20 +142,21 @@ bglmer <- function(formula, data=NULL, family = gaussian,
   
   devfun <- do.call(mkBglmerDevfun, c(glmod, glmod$X, glmod$reTrms,
                                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior),
-                                           verbose=verbose, control=control, nAGQ = 0)))
+                                           verbose = verbose, control = control, nAGQ = 0)))
   if (nAGQ==0 && devFunOnly) return(devfun)
   ## optimize deviance function over covariance parameters
   
   if (is.list(start) && !is.null(start$fixef))
     if (nAGQ==0) stop("should not specify both start$fixef and nAGQ==0")
-  
-  opt <- optimizeGlmer(devfun,
-                       optimizer = control$optimizer[[1]],
-                       restart_edge=control$restart_edge,
-                       control = control$optCtrl,
-                       start=start,
-                       nAGQ = 0,
-                       verbose=verbose)
+
+  args <- list(devfun = devfun, optimizer = control$optimizer[[1]],
+               restart_edge = if (nAGQ == 0) control$restart_edge else FALSE,
+               start = start, verbose = verbose, control = control$optCtrl, nAGQ = 0);
+  if (!is.null(formals(optimizeGlmer)$boundary.tol)) args$boundary.tol <- if (nAGQ == 0) control$boundary.tol else 0;
+  if (!is.null(formals(optimizeGlmer)[["..."]])) {
+    args$calc.derivs <- FALSE;
+  }
+  opt <- do.call("optimizeGlmer", args, TRUE, sys.frame(0));
   
   if(nAGQ > 0L) {
     
@@ -151,26 +166,41 @@ bglmer <- function(formula, data=NULL, family = gaussian,
     devfun <- updateBglmerDevfun(devfun, glmod$reTrms, nAGQ = nAGQ)
     
     if (devFunOnly) return(devfun)
+    
+    args$devfun <- devfun;
+    args$optimizer <- control$optimizer[[2]];
+    args$restart_edge <- control$restart_edge;
+    args$nAGQ <- nAGQ;
+    args$stage <- 2;
+    if (!is.null(formals(optimizeGlmer)$boundary.tol)) args$boundary.tol <- control$boundary.tol;
+    if (!is.null(formals(optimizeGlmer)[["..."]])) {
+      args$calc.derivs <- FALSE;
+      args$use.last.params <- control$use.last.params;
+    }
     ## reoptimize deviance function over covariance parameters and fixed effects
-    opt <- optimizeGlmer(devfun,
-                         optimizer = control$optimizer[[2]],
-                         restart_edge=control$restart_edge,
-                         control = control$optCtrl,
-                         start=start,
-                         nAGQ=nAGQ,
-                         verbose = verbose,
-                         stage=2)
+    opt <- do.call("optimizeGlmer", args, TRUE, sys.frame(0));
   }
+  lme4Env <- asNamespace("lme4");
+  cc <- if (!is.null(control$calc.derivs) && !control$calc.derivs) NULL else {
+    if (verbose>10) cat("checking convergence\n")
+    if (exists("checkConv", lme4Env))
+      get("checkConv", lme4Env)(attr(opt,"derivs"), opt$par,
+                ctrl = control$checkConv,
+                lbound=environment(devfun)$lower)
+    else NULL
+  }
+  
   ## prepare output
-  result <- mkMerMod(environment(devfun), opt, glmod$reTrms, fr = glmod$fr, mcout)
+  args <- list(rho = environment(devfun), opt = opt, reTrms = glmod$reTrms, fr = glmod$fr, mc = mcout);
+  if (!is.null(formals(mkMerMod)$lme4conv)) args$lme4conv <- cc;
+  result <- do.call("mkMerMod", args, TRUE, sys.frame(0));
   result <- repackageMerMod(result, opt, environment(devfun));
-
+  
   return(result);
 }
 
 lmmObjective <- function(pp, resp, sigma, exponentialTerms, polynomialTerm, blmerControl) {
   sigma.sq <- sigma^2;
-
   result <- resp$objective(pp$ldL2(), pp$ldRX2(), pp$sqrL(1.0), sigma.sq);
 
   exponentialTerm <- 0;
@@ -192,17 +222,30 @@ lmmObjective <- function(pp, resp, sigma, exponentialTerms, polynomialTerm, blme
 repackageMerMod <- function(merMod, opt, devFunEnv) {
   isLMM <- is(merMod, "lmerMod");
 
-  if (isLMM)
-    expandPars(opt$par, devFunEnv$pars);
-
   blmerControl <- devFunEnv$blmerControl;
   priors <- devFunEnv$priors;
-  
-  beta <- if (isLMM) merMod@pp$beta(1.0) else merMod@beta;
-  Lambda.ts <- getCovBlocks(merMod@pp$Lambdat, blmerControl$ranefStructure);
-  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts);
 
   if (isLMM) {
+    expandParsInCurrentFrame(opt$par, devFunEnv$parInfo);
+    if (blmerControl$fixefOptimizationType != FIXEF_OPTIM_NUMERIC) beta <- merMod@pp$beta(1.0)
+    else merMod@beta <- beta;
+  } else {
+    beta <- opt$par[-devFunEnv$dpars];
+  }
+  
+  Lambda.ts <- getCovBlocks(merMod@pp$Lambdat, devFunEnv$ranefStructure);
+  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts, sigma);
+
+  if (isLMM) {
+    if (blmerControl$fixefOptimizationType == FIXEF_OPTIM_NUMERIC) {
+      fixefExponentialTerm <- calculateFixefExponentialTerm(beta, merMod@pp$beta(1.0), merMod@pp$RX());
+      if (is.null(exponentialTerms[["-2"]])) {
+        exponentialTerms[["-2"]] <- fixefExponentialTerm;
+      } else {
+        exponentialTerms[["-2"]] <- exponentialTerms[["-2"]] + fixefExponentialTerm;
+      }
+    }
+
     if (!is.null(exponentialTerms[["-2"]]))
       merMod@devcomp$cmp[["pwrss"]] <- merMod@devcomp$cmp[["pwrss"]] + as.numeric(exponentialTerms[["-2"]]);
   
@@ -224,8 +267,12 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
       merMod@devcomp$cmp[["sigmaML"]] <- sigma;
       merMod@devcomp$cmp[["sigmaREML"]] <- sigma * sqrt(numObs / (numObs - numFixef));
     }
+
     
     objectiveValue <- merMod@resp$objective(merMod@pp$ldL2(), merMod@pp$ldRX2(), merMod@pp$sqrL(1.0), sigma^2);
+    if (blmerControl$fixefOptimizationType == FIXEF_OPTIM_NUMERIC)
+      objectiveValue <- objectiveValue + fixefExponentialTerm / sigma^2;
+    
     if (merMod@devcomp$dims[["REML"]] > 0L) {
       priorPenalty <- merMod@devcomp$cmp[["REML"]] - objectiveValue;
       merMod@devcomp$cmp[["REML"]] <- objectiveValue;
@@ -244,7 +291,7 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
                cnms    = merMod@cnms,
                lower   = merMod@lower,
                theta   = merMod@theta,
-               beta    = merMod@beta,
+               beta    = beta,
                u       = merMod@u,
                devcomp = merMod@devcomp,
                pp      = merMod@pp,
@@ -301,7 +348,9 @@ setPrior <- function(regression, cov.prior = NULL,
   }
 
   priors <- evaluatePriorArguments(matchedCall$cov.prior, matchedCall$fixef.prior, matchedCall$resid.prior,
-                                   regression@devcomp$dim, regression@cnms, envir);
+                                   regression@devcomp$dim, regression@cnms,
+                                   as.integer(diff(regression@Gp) / sapply(regression@cnms, length)),
+                                   envir);
 
   if (!covMissing) regression@covPriors <- priors$covPriors;
   if (!fixefMissing) regression@fixefPrior <- priors$fixefPrior;
@@ -327,7 +376,9 @@ parsePrior <- function(regression, cov.prior = NULL,
   }
 
   priors <- evaluatePriorArguments(matchedCall$cov.prior, matchedCall$fixef.prior, matchedCall$resid.prior,
-                                   regression@devcomp$dim, regression@cnms, envir);
+                                   regression@devcomp$dim, regression@cnms,
+                                   as.integer(diff(regression@Gp) / sapply(regression@cnms, length)),
+                                   envir);
 
   result <- list();
   if (!covMissing) result$covPriors <- priors$covPriors;

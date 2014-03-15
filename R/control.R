@@ -1,3 +1,6 @@
+## "control" refers to how optimization should proceed, i.e. which parameters
+## need numeric and which can be profiled out
+
 ## hack this as on "common scale" is really inconvenient here
 getResidPriorDFAdjustment <- function(residPrior)
 {
@@ -8,8 +11,26 @@ getResidPriorDFAdjustment <- function(residPrior)
   }
   return(0);
 }
-    
-createBlmerControl <- function(reTrms, priors)
+
+getThetaLowerBoundsForDimension <- function(d) {
+  if (d == 1) return(0);
+  c(0, rep(-Inf, d - 1), getThetaLowerBoundsForDimension(d - 1))
+}
+
+## TODO: this should eventually not assume the ranef structure but instead
+## suck it from Lind and theta, if possible
+getRanefStructure <- function(pred, resp, reTrms) {
+  ranefStructure <- list(numCovParameters = sum(sapply(reTrms$cnms, function(cnm) { d <- length(cnm); d * (d + 1) / 2; })),
+                         numRanefPerFactor = diff(reTrms$Gp),
+                         numCoefPerFactor = as.integer(sapply(reTrms$cnms, length)),
+                         numFactors = length(reTrms$cnms));
+  ranefStructure$numGroupsPerFactor <- as.integer(ranefStructure$numRanefPerFactor / ranefStructure$numCoefPerFactor + 0.5);
+  ranefStructure$lower <- as.numeric(unlist(sapply(ranefStructure$numCoefPerFactor, getThetaLowerBoundsForDimension)));
+  
+  ranefStructure;
+}
+
+createBlmerControl <- function(pred, resp, reTrms, priors)
 {
   df <- 0; ## adjustment to polynomial (sigma.sq)^{-df/2}
   constant <- 0; ## normalizing constants and the like. On deviance (-2 log) scale
@@ -24,36 +45,43 @@ createBlmerControl <- function(reTrms, priors)
     constant <- constant + getConstantTerm(priors$covPrior[[i]]);
   }
 
-  sigmaOptimizationType <- getSigmaOptimizationType(priors);
-
-  numCovParameters <- sum(sapply(reTrms$cnms, function(cnm) { d <- length(cnm); d * (d + 1) / 2; }));
-
-  ranefStructure <- list(numRanefPerFactor = diff(reTrms$Gp),
-                         numCoefPerFactor = as.integer(sapply(reTrms$cnms, length)),
-                         numFactors = length(reTrms$cnms));
-  ranefStructure$numGroupsPerFactor <- as.integer(ranefStructure$numRanefPerFactor / ranefStructure$numCoefPerFactor + 0.5);
+  fixefOptimizationType <- getFixefOptimizationType(pred, resp, priors);
+  sigmaOptimizationType <- getSigmaOptimizationType(resp, priors);
   
   return(list(df = df, constant = constant,
-              sigmaOptimizationType = sigmaOptimizationType,
-              numCovParameters = numCovParameters,
-              ranefStructure = ranefStructure));
+              fixefOptimizationType = fixefOptimizationType,
+              sigmaOptimizationType = sigmaOptimizationType));
 }
 
-SIGMA_OPTIM_NUMERIC      <- "numeric";
-SIGMA_OPTIM_POINT        <- "point";
-SIGMA_OPTIM_SQ_LINEAR    <- "sigma.sq.linear";
-SIGMA_OPTIM_SQ_QUADRATIC <- "sigma.sq.quadratic";
-SIGMA_OPTIM_QUADRATIC    <- "sigma.quadratic";
-## determines how to optimize over sigma (and maybe other stuff in future)
-## possible values are:
-##  sigmaOptimization ==
-##    SIGMA_OPTIM_NUMERIC      - brute force by adding to numeric optimizer
-##    SIGMA_OPTIM_POINT        - sigma is fixed to a particular value
-##    SIGMA_OPTIM_SQ_LINEAR    - sigma.sq.hat is root to linear equation
-##    SIGMA_OPTIM_SQ_QUADRATIC - sigma.sq.hat is root to quadratic equation
-##    SIGMA_OPTIM_QUADRATIC    - sigma.hat is root to quadratic equation
-getSigmaOptimizationType <- function(priors)
+FIXEF_OPTIM_NA      <- "na";      ## no fixefs in model
+FIXEF_OPTIM_NUMERIC <- "numeric"; ## brute force by adding to numeric optimizer
+FIXEF_OPTIM_LINEAR  <- "linear";  ## mle found by root of linear equation. or, don't worry about it
+getFixefOptimizationType <- function(pred, resp, priors)
 {
+  if (length(pred$X) == 0) return(FIXEF_OPTIM_NA);
+  
+  if (!is(resp, "lmerResp")) return(FIXEF_OPTIM_NUMERIC);
+  
+  fixefPrior <- priors$fixefPrior;
+  
+  if (is(fixefPrior, "bmerTDist")) return(FIXEF_OPTIM_NUMERIC);
+
+  return(FIXEF_OPTIM_LINEAR);
+}
+
+## determines how to optimize over sigma
+## possible values are:
+SIGMA_OPTIM_NA           <- "na";                 ## doesn't apply
+SIGMA_OPTIM_NUMERIC      <- "numeric";            ## brute force by adding to numeric optimizer
+SIGMA_OPTIM_POINT        <- "point";              ## sigma is fixed to a particular value
+SIGMA_OPTIM_SQ_LINEAR    <- "sigma.sq.linear";    ## sigma.sq.hat is root to linear equation
+SIGMA_OPTIM_SQ_QUADRATIC <- "sigma.sq.quadratic"; ## sigma.sq.hat is root to quadratic equation
+SIGMA_OPTIM_QUADRATIC    <- "sigma.quadratic";    ## sigma.hat is root to quadratic equation
+
+getSigmaOptimizationType <- function(resp, priors)
+{
+  if (!is(resp, "lmerResp")) return(SIGMA_OPTIM_NA);
+  
   fixefPrior <- priors$fixefPrior;
   covPriors  <- priors$covPriors;
   residPrior <- priors$residPrior;
@@ -62,11 +90,15 @@ getSigmaOptimizationType <- function(priors)
   
   if (is(fixefPrior, "bmerNormalDist") && fixefPrior@commonScale == FALSE)
     return(SIGMA_OPTIM_NUMERIC);
-
+  if (is(fixefPrior, "bmerTDist") && fixefPrior@commonScale == TRUE)
+    return(SIGMA_OPTIM_NUMERIC);
   
   exponentialTerms <- c();
   for (i in 1:length(covPriors)) {
     covPrior.i <- covPriors[[i]];
+
+    if (is(covPrior.i, "bmerCustomDist") && covPrior.i@commonScale == FALSE) return(SIGMA_OPTIM_NUMERIC);
+    
     exponentialTerm <- getExponentialSigmaPower(covPrior.i);
     if (exponentialTerm != 0) exponentialTerms <- union(exponentialTerms, exponentialTerm);
   }

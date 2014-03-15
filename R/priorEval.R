@@ -1,7 +1,8 @@
-evaluateFixefPrior <- function(fixefPrior, evalEnv) {
+evaluateFixefPrior <- function(fixefPrior, defnEnv, evalEnv) {
   if (is.character(fixefPrior)) fixefPrior <- parse(text = fixefPrior)[[1]];
-
-  if (is.symbol(fixefPrior) && exists(toString(fixefPrior), envir = evalEnv)) {
+  
+  if (is.symbol(fixefPrior) && exists(toString(fixefPrior), envir = evalEnv) &&
+      !(as.character(fixefPrior) %in% fixefDistributions)) {
     fixefPrior <- get(toString(fixefPrior), envir = evalEnv);
     if (is.character(fixefPrior)) fixefPrior <- parse(text = fixefPrior)[[1]];
   }
@@ -11,12 +12,12 @@ evaluateFixefPrior <- function(fixefPrior, evalEnv) {
     fixefDistributionName <- as.character(fixefPrior[[1]]);
     if (!(fixefDistributionName %in% fixefDistributions)) stop("unrecognized fixef distribution: '", fixefDistributionName, "'");
 
-    return(eval(fixefPrior, envir = parent.frame(), enclos = evalEnv));
+    return(eval(fixefPrior, envir = evalEnv));
   }
   return(NULL);
 }
 
-evaluateCovPriors <- function(covPriors, factorColumnNames, evalEnv) {
+evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv) {
   numFactors <- length(factorColumnNames);
   factorNames <- names(factorColumnNames);
   result <- vector("list", numFactors);
@@ -29,7 +30,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, evalEnv) {
     covPriors <- gsub("inverse.gamma", "invgamma", covPriors);
     covPriors <- parse(text = covPriors)[[1]];
   }
-
+  
   if (is.call(covPriors) && covPriors[[1]] == "list") covPriors[[1]] <- NULL;
   
   if (!is.list(covPriors)) covPriors <- list(covPriors);
@@ -37,7 +38,8 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, evalEnv) {
   for (i in 1:length(covPriors)) {
     covPrior.i <- covPriors[[i]];
     ## can't just let 'em re-define "wishart", or use the built-in gamma
-    if (is.symbol(covPrior.i) && exists(toString(covPrior.i), envir = evalEnv) && !(as.character(covPrior.i) %in% covDistributions)) {
+    if (is.symbol(covPrior.i) && exists(toString(covPrior.i), envir = evalEnv) &&
+        !(as.character(covPrior.i) %in% covDistributions)) {
       covPrior.i <- get(toString(covPrior.i), envir = evalEnv);
       if (is.character(covPrior.i)) covPrior.i <- parse(text = covPrior.i)[[1]];
       covPriors[[i]] <- covPrior.i;
@@ -82,9 +84,11 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, evalEnv) {
 
     covDistributionName <- as.character(result.i[[1]]);
     if (!(covDistributionName %in% covDistributions)) stop("unrecognized ranef covariance distribution: '", covDistributionName, "'");
+
+    defnEnv$q.k <- defnEnv$level.dim <- length(factorColumnNames[[i]]);
+    defnEnv$j.k <- defnEnv$n.grps <- numGroupsPerFactor[i];
     
-    evalEnv$level.dim <- length(factorColumnNames[[i]]);
-    result.i <- eval(result.i, envir = parent.frame(), enclos = evalEnv);
+    result.i <- eval(result.i, envir = evalEnv);
     
     if (!is.null(result.i)) result[[i]] <- result.i;
   }
@@ -92,7 +96,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, evalEnv) {
   return(result);
 }
 
-evaluateResidualPrior <- function(residPrior, evalEnv) {
+evaluateResidualPrior <- function(residPrior, defnEnv, evalEnv) {
   if (is.character(residPrior)) {
     residPrior <- gsub("inverse.gamma", "invgamma", residPrior);
     residPrior <- parse(text = residPrior)[[1]];
@@ -107,44 +111,48 @@ evaluateResidualPrior <- function(residPrior, evalEnv) {
     if (is.symbol(residPrior)) residPrior <- call(as.character(residPrior));
     residDistributionName <- as.character(residPrior[[1]]);
     if (!(residDistributionName %in% residDistributions)) stop("unrecognized residual variance distribution: '", residDistributionName, "'");
-  
-    return(eval(residPrior, envir = parent.frame(), enclos = evalEnv));
+
+    return(eval(residPrior, envir = evalEnv));
   }
   return(NULL);
 }
   
 evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
-                                   dims, cnms, parentEnv) {
+                                   dims, factorColumnNames, numGroupsPerFactor, parentEnv) {
   result <- list();
   evalEnv <- new.env(parent = parentEnv);
+  defnEnv <- new.env();
+  
+  defnEnv$p <- defnEnv$n.fixef <- dims[["p"]];
+  defnEnv$n <- defnEnv$n.obs   <- dims[["n"]];
 
-  evalEnv$p <- evalEnv$n.fixef <- dims[["p"]];
-  evalEnv$n <- evalEnv$n.obs   <- dims[["n"]];
-
+  isLMM <- dims[["GLMM"]] == 0;
+  
   ## add the names of dist functs to the evaluating env
   for (distributionName in names(lmmDistributions)) {
     distributionFunction <- lmmDistributions[[distributionName]];
 
-    environment(distributionFunction) <- evalEnv;
-    if (dims[["GLMM"]] == 1L) {
+    environment(distributionFunction) <- defnEnv;
+    if (!isLMM) {
       ## need both copies to have their envs tweaked, but only one called
       distributionFunction <- glmmDistributions[[distributionName]];
-      if (!is.null(distributionFunction)) environment(distributionFunction) <- evalEnv;
+      if (!is.null(distributionFunction)) environment(distributionFunction) <- defnEnv;
     }
-    if (!is.null(distributionFunction)) assign(distributionName, distributionFunction);
+    if (!is.null(distributionFunction)) assign(distributionName, distributionFunction, envir = evalEnv);
   }
-  ## browser();
+  
+  result$fixefPrior <- evaluateFixefPrior(fixefPrior, defnEnv, evalEnv);
+  if (is(result$fixefPrior, "bmerTDist") && isLMM && dims[["REML"]] > 0L)
+    stop("t distribution for fixed effects only supported when REML = FALSE");
+  result$covPriors  <- evaluateCovPriors(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv);
 
-  result$fixefPrior <- evaluateFixefPrior(fixefPrior, evalEnv);
-  result$covPriors  <- evaluateCovPriors(covPriors, cnms, evalEnv);
-
-  if (dims[["GLMM"]] == 0L) {
-    environment(residualVarianceGammaPrior) <- evalEnv;
-    environment(residualVarianceInvGammaPrior) <- evalEnv;
-    assign("gamma", residualVarianceGammaPrior);
-    assign("invgamma", residualVarianceInvGammaPrior);
+  if (isLMM) {
+    environment(residualVarianceGammaPrior) <- defnEnv;
+    environment(residualVarianceInvGammaPrior) <- defnEnv;
+    assign("gamma", residualVarianceGammaPrior, envir = evalEnv);
+    assign("invgamma", residualVarianceInvGammaPrior, envir = evalEnv);
     
-    result$residPrior <- evaluateResidualPrior(residPrior, evalEnv);
+    result$residPrior <- evaluateResidualPrior(residPrior, defnEnv, evalEnv);
   }
   
   return(result);

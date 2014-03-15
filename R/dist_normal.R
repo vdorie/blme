@@ -46,7 +46,7 @@ setMethod("getExponentialSigmaPower", "bmerNormalDist",
 );
 setMethod("getExponentialTerm", "bmerNormalDist",
   function(object, beta) {
-    exponential <- crossprod(object@R.cov.inv %*% beta)[1];
+    exponential <- tcrossprod(crossprod(beta, object@R.cov.inv))[1];
     if (object@commonScale == TRUE) c(-2, exponential) else c(0, exponential);
   }
 );

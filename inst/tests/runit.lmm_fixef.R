@@ -3,27 +3,41 @@ cat("\n\nRUnit test cases for bmer::blmer function with priors on the fixed effe
 test.blme.blmer.fixefPrior <- function()
 {
   source(system.file("common", "lmmData.R", package = "blme"));
+
+  control <- lmerControl(optimizer = "bobyqa");
+  lme4IsOld <- compareVersion(toString(packageVersion("lme4")), "1.1-4") < 0;
   
-  fixef.prior <- "normal(sd = 1, common.scale = TRUE)";
-  ## the default optimizers seem to be sucking for this model
-  ## under the assumption that they'll improve in the future,
-  ## start it at the mode as computed by the old version
-  startingValues <- c(0.648196454969222, -0.251155871182205, 1.41982711952805, 5.30818893266426, 1.64487709178204, 2.42515000251243, 0.934438088183127, 0.218132399295426, 0);
-  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData,
+  fixef.prior <- "normal(sd = 7, common.scale = TRUE)";
+
+  startingValues <- c(0.714336877636958, -0.242234853872256, 1.56142829865131, 0.931702840718855, 0.456177995916484, -0.174861679569041, 1.0585277913399, 0.121071648252222, 0.215801873693294);
+  result <- if (lme4IsOld) c(0.714336904883696, -0.242233333549434, 1.56142849039447, 0.931702729108028, 0.456177204451304, -0.174861811614276, 1.05852821195682, 0.121071547240353, 0.215801842870277) else c(0.714336904883696, -0.242233333549434, 1.56142849039447, 0.931702729108028, 0.456177204451304, -0.174861811614276, 1.05852821195682, 0.121071547240353, 0.215801842870277);
+  
+  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, control = control,
                     cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues);
-  checkEquals(fit@pp$theta, c(0.648195706527889, -0.251155765769507, 1.41982725882128, 5.30817842042119, 1.6448714780241, 2.42514919244429, 0.93443679163898, 0.218131815825292, 8.25408519583847e-07));
+  checkEquals(fit@theta, result, tolerance = 5.0e-5);
 
 
-  fixef.prior <- "normal(sd = 1, common.scale = FALSE)";
-  startingValues <- list(theta = c(0.696498273543799, -0.173433928372341, 1.49823772191009, 5.25514420225188,
-                                   1.54058807242222, 3.37965560881278, 1.04257820385898, -0.0394352712532918,
-                                   0.854358283868515),
-                         sigma = 0.970090843027481);
-  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData,
-                    cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues);
-  checkEquals(c(fit@pp$theta, fit@devcomp$cmp[["sigmaREML"]]),
-              c(0.696497912161098, -0.173434135295791, 1.49823739668995, 5.25513473016839, 1.54058911169323, 3.37964801540207, 1.04257692653163, -0.0394332012063832, 0.854358710427337, 0.970090843027481));
+  fixef.prior <- "normal(sd = 10, common.scale = FALSE)";
+  startingValues <- list(theta = c(0.705301445472825, -0.236130064856711, 1.54070576284237, 0.919298480793096, 0.444958591085821, -0.162201425613492, 1.04498858978601, 0.121905334663798, 0.204897688209115),
+                         sigma = 0.969103097682058);
+  result <- if (lme4IsOld) c(0.705369855182081, -0.236759905121764, 1.54063251814471, 0.919250008248663, 0.444836570608055, -0.162132239807962, 1.04497528986881, 0.121858574203024, 0.204725931113902) else c(0.705369855182081, -0.236759905121764, 1.54063251814471, 0.919250008248663, 0.444836570608055, -0.162132239807962, 1.04497528986881, 0.121858574203024, 0.204725931113902);
   
+  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, control = control,
+                    cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues);
+  checkEquals(fit@theta, result, tolerance = 5.0e-5);
+  checkEquals(fit@devcomp$cmp[["sigmaREML"]], if (lme4IsOld) 0.969074276597577 else 0.969074276597577, tolerance = 1.0e-6);
+  
+  
+  fixef.prior <- "t(3, c(10^2, 2.5^2), common.scale = FALSE)";
+  startingValues <- list(theta = c(0.645289664330177, -0.151604332140352, 1.39404761930357, 0.788435718441722, 0.312013729923666, -0.0155461916762167, 0.949082870229164, 0.117100582888698, 0),
+                         beta = c(5.32508665168687, 1.16859904165051, 4.0443701271478));
+  result <- if (lme4IsOld) c(0.645289146996319, -0.151634501090343, 1.39403793373549, 0.788432069261316, 0.312010137757441, -0.0155458970707687, 0.949081665570772, 0.117100684805151, 3.13476220325792e-07) else c(0.645289146996319, -0.151634501090343, 1.39403793373549, 0.788432069261316, 0.312010137757441, -0.0155458970707687, 0.949081665570772, 0.117100684805151, 0);
+  fixefResult <- if (lme4IsOld) c(5.32507818836626, 1.16860398465568, 4.04437041491386) else c(5.32507818836626, 1.16860398465568, 4.04437041491386)
+  
+  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, REML = FALSE, control = control,
+                    cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues);
+  checkEquals(fit@theta, result, tolerance = 5.0e-5);
+  checkEquals(fit@beta, fixefResult, tolerance = 5.0e-5);
   
   # check even that these run without error
   options(warn = 2);
