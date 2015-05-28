@@ -169,7 +169,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
       stop("should not specify both start$fixef and nAGQ==0")
   }
   
-  if (packageVersion("lme4") > "1.1-7" && identical(control$nAGQ0initStep, TRUE)) {
+  if (packageVersion("lme4") <= "1.1-7" || identical(control$nAGQ0initStep, TRUE)) {
     args <- list(devfun = devfun,
                  optimizer = control$optimizer[[1]],
                  restart_edge = if (nAGQ == 0) control$restart_edge else FALSE,
