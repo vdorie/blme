@@ -1,0 +1,1105 @@
+\documentclass[10pt]{article}
+
+\usepackage[intlimits]{amsmath}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{amsfonts,amsthm,amssymb}
+\usepackage{graphicx,float}
+\usepackage{ulem}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\usepackage{bm}
+\usepackage{undertilde}
+\usepackage{mathrsfs}
+
+\newcommand{\E}{\mathsf{E}}
+\newcommand{\VAR}{\mathsf{VAR}}
+\newcommand{\COV}{\mathsf{COV}}
+\newcommand{\SD}{\mathsf{SD}}
+\newcommand{\Prob}{\mathsf{P}}
+
+\begin{document}
+\normalem
+\setlength{\parindent}{0pt}
+
+\section*{Model Specification}
+
+We first assume that we are in a hierarchical model setting with ``fixed''
+and ``random'' effects, the fixed effects not being explicitly modeled
+while the random effects are given a distribution. \\
+
+For the following, there are $N$ total observations. In addition,
+there are $K$ ``levels'' or ``grouping factors'' in the hierarchy, not necessarily
+nested. At each of the $k=1,\ldots,K$ levels, there are $J_k$
+different groups, any one of which each of the $i=1,\ldots,N$
+observations can belong. Also at each level, there are $Q_k$
+different parameters modeled with one vector of that length for
+each of the $j=1,\ldots,J_k$ groups. Finally, there are $P$
+unmodeled coefficients that also need to be estimated. \\
+
+For each observation, associated with the unmodeled parameters is a
+vector of covariates, $x_i$. For each pair of an observation and
+level there is a vector associated with the the modeled parameters,
+$z_{ik}$. \\
+
+If \(g_k(i) : \{1,\ldots,N\} \rightarrow \{1,\ldots,J_k\}\) is a
+function that maps the $i$th observation to its group at the $k$th
+level, then our model is:
+\begin{align*}
+y_i \mid \theta', \beta, \sigma^2 & \overset{\text{\tiny ind}}{\sim}
+N\left(x_i^\top\beta + \sum_{k=1}^K z_{ik}^\top\theta_{g_k(i)k}', \sigma^2\right), i=1,\ldots,N, \\
+\theta_{jk}' \mid \Sigma_k, \sigma^2 & \overset{\text{\tiny iid}}{\sim}
+N(0, \sigma^2\Sigma_k), j=1,\ldots,J_k, k=1,\ldots,K.
+\end{align*}
+Furthermore, it is also assumed that the various values of $\theta'$
+are independent between different levels. \\ \\
+We can write the above more simply in matrix notation:
+\begin{align*}
+{\bf Y} \mid \theta', \beta, \sigma^2 & \sim
+N({\bf X}\beta + {\bf Z}\theta', \sigma^2 \mathrm{I}_N), \\
+\theta' \mid \Sigma, \sigma^2 & \sim N(0, \sigma^2 \Sigma).
+\end{align*} 
+To build the necessary matrices, we call ``\(\mathrm{vec}\)'' the vertical concatenation of a sequence of
+column vectors, ``\(\mathrm{cat}\)'' the horizontal
+concatenation, and ``\(\mathrm{diag}\)'' the block diagonal matrix
+composed of its arguments. Then,
+\begin{equation*}
+\theta' = \mathrm{vec}_{k=1}^K\mathrm{vec}_{j=1}^{J_k}(\theta_{jk}'),
+\Sigma=\mathrm{diag}_{k=1}^K({\bf I}_{J_k} \otimes \Sigma_k),
+{\bf Z}=\mathrm{cat}_{k=1}^K\mathrm{cat}_{j=1}^{J_k}\mathrm{vec}_{i=1}^N
+(z_{ik}^\top\mathbb{I}\{g_k(i)=j\}),
+\end{equation*}
+and ${\bf X}$ is the standard regression design matrix obtained by
+vertically stacking each $x_i^\top$. Let $\sum_{k=1}^K J_k Q_k =
+Q$. We then have
+$\mathrm{dim}({\bf X}) = N\times P,
+\mathrm{dim}(\beta) = P \times 1,
+\mathrm{dim}({\bf Z})=N\times\sum_{k=1}^K J_k Q_k = N \times Q,\) and \(
+\mathrm{dim}(\theta') = Q \times 1$. \\ \\
+The final modification that we make is to define $\Lambda\Lambda^\top
+= \Sigma$ as the Cholesky factorization of the (unscaled) covariance matrix of the
+unmodeled coefficients. Note that we can actually compute this for
+each $\Sigma_k$ and the same procedure that combines those matrices
+into $\Sigma$ can be used on all of the $\Lambda_k$s to produce
+$\Lambda$. With this, $\theta=\Lambda^{-1}\theta'$ has a spherical
+distribution. \\ \\
+We can write the joint density of the modeled coefficients and the
+observations as:
+
+\begin{align*}
+p({\bf Y}, \theta \mid \Lambda, \beta, \sigma^2) & \propto
+(\sigma^2)^{-(N + Q)/2}\exp\left\{
+-\frac{1}{2\sigma^2}\left[ \|{\bf Y} - {\bf X}\beta - {\bf Z}\Lambda \theta\|^2 +
+  \|\theta\|^2  \right]
+\right\}, \\
+%
+& = (\sigma^2)^{-(N + Q)/2}\exp\left\{
+-\frac{1}{2\sigma^2}\left\|
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix} -
+\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\
+{\bf I} & 0 \end{bmatrix}
+\begin{bmatrix} \theta \\ \beta \end{bmatrix}
+\right\|^2
+\right\}
+\end{align*}
+
+In this sense, the joint density can be seen as a single
+Gaussian with diagonal covariance. If the design matrix is ${\bf A}$, then the
+mode would be given by $\left({\bf A}^\top{\bf A}\right)^{-1}{\bf
+  A}^\top{\bf Y}$. To facilitate this calculation, we compute the
+block-wise Cholesky factorization of inner product of the ``augmented'' design matrix
+above, i.e. ${\bf A}^\top{\bf A}$.
+
+\begin{align*}
+\begin{bmatrix}
+\Lambda^\top {\bf Z}^\top {\bf Z}\Lambda + {\bf I} & \Lambda^\top {\bf
+  Z}^\top {\bf X} \\
+  {\bf X}^\top {\bf Z}\Lambda & {\bf X}^\top{\bf X}\end{bmatrix} & =
+\begin{bmatrix} {\bf L}_Z & 0 \\ {\bf L}_{ZX} & {\bf
+    L}_{X} \end{bmatrix}
+\begin{bmatrix} {\bf L}^\top_Z & {\bf L}^\top_{ZX} \\ 0 & {\bf
+    L}^\top_{X} \end{bmatrix}, \\
+{\bf L}_Z{\bf L}_Z^\top & = \Lambda^\top {\bf Z}^\top {\bf Z}\Lambda +
+{\bf I}, \\
+{\bf L}_{ZX} & = {\bf X}^\top{\bf Z}\Lambda{\bf L}_Z^{-\top}, \\
+{\bf L}_X{\bf L}_X^\top & = {\bf X}^\top{\bf X} - {\bf L}_{ZX}{\bf L}_{ZX}^\top.
+\end{align*}
+
+The inverse of a block-wise triagonal matrix is given by:
+
+\begin{equation*}
+\begin{bmatrix} {\bf L}_Z & 0 \\ {\bf L}_{ZX} & {\bf
+    L}_{X} \end{bmatrix}
+\begin{bmatrix} {\bf L}_Z^{-1} & 0 \\ - {\bf L}_X^{-1} {\bf L}_{ZX}{\bf L}_Z^{-1} & {\bf
+    L}_{X}^{-1} \end{bmatrix}
+ = 
+\begin{bmatrix} {\bf I} & 0 \\0 & {\bf I} \end{bmatrix}.
+\end{equation*}
+
+Thus the modes of the joint distribution are given by:
+
+\begin{align*}
+\begin{bmatrix} \tilde{\theta} \\ \tilde{\beta} \end{bmatrix} & =
+\begin{bmatrix}
+{\bf L}_Z^{-\top} & -{\bf L}_Z^{-\top}{\bf L}_{ZX}^\top{\bf
+  L}_X^{-\top} \\
+0 & {\bf L}_X^{-\top}
+\end{bmatrix}
+\begin{bmatrix} {\bf L}_Z^{-1} & 0 \\ - {\bf L}_X^{-1} {\bf L}_{ZX}{\bf L}_Z^{-1} & {\bf
+    L}_{X}^{-1} \end{bmatrix}
+\begin{bmatrix} \Lambda^\top {\bf Z}^\top & {\bf I} \\ {\bf X}^\top & 0 \end{bmatrix}
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix}, \\
+%
+& = \begin{bmatrix}
+{\bf L}_Z^{-\top} & -{\bf L}_Z^{-\top}{\bf L}_{ZX}^\top{\bf
+  L}_X^{-\top} \\
+0 & {\bf L}_X^{-\top}
+\end{bmatrix}
+\begin{bmatrix} {\bf L}_Z^{-1} & 0 \\ - {\bf L}_X^{-1} {\bf L}_{ZX}{\bf L}_Z^{-1} & {\bf
+    L}_{X}^{-1} \end{bmatrix}
+\begin{bmatrix} \Lambda^\top{\bf Z}^\top{\bf Y} \\ {\bf X}^\top{\bf
+    Y} \end{bmatrix}, \\
+%
+& = \begin{bmatrix}
+{\bf L}_Z^{-\top} & -{\bf L}_Z^{-\top}{\bf L}_{ZX}^\top{\bf
+  L}_X^{-\top} \\
+0 & {\bf L}_X^{-\top}
+\end{bmatrix}
+\begin{bmatrix}
+{\bf L}_Z^{-1}\Lambda^\top {\bf Z}^\top {\bf Y} \\
+{\bf L}_X^{-1}{\bf X}^\top{\bf Y} -
+{\bf L}_X^{-1}{\bf L}_{ZX}{\bf L}_Z^{-1}\Lambda^\top{\bf Z}^\top {\bf Y}
+\end{bmatrix}, \\
+%
+& = \begin{bmatrix}
+{\bf L}_Z^{-\top} & -{\bf L}_Z^{-\top}{\bf L}_{ZX}^\top{\bf
+  L}_X^{-\top} \\
+0 & {\bf L}_X^{-\top}
+\end{bmatrix}
+\begin{bmatrix}
+\utilde\theta \\
+{\bf L}_X^{-1}\left({\bf X}^\top{\bf Y} - {\bf L}_{ZX}\utilde\theta\right)
+\end{bmatrix}, \\
+%
+& = \begin{bmatrix}
+{\bf L}_Z^{-\top} & -{\bf L}_Z^{-\top}{\bf L}_{ZX}^\top{\bf
+  L}_X^{-\top} \\
+0 & {\bf L}_X^{-\top}
+\end{bmatrix}
+\begin{bmatrix}
+\utilde\theta \\
+\utilde\beta
+\end{bmatrix}, \\
+%
+& = \begin{bmatrix}
+{\bf L}_Z^{-\top}\left(\utilde\theta-{\bf L}_{ZX}^\top{\bf
+    L}_X^{-\top}\utilde\beta\right) \\
+{\bf L}_X^{-T}\utilde\beta
+\end{bmatrix}, \\
+& = \begin{bmatrix}
+{\bf L}_Z^{-\top}\left(\utilde\theta-{\bf L}_{ZX}^\top\tilde{\beta}\right) \\
+{\bf L}_X^{-T}\utilde\beta
+\end{bmatrix}. \\
+\end{align*}
+
+\noindent where, $\utilde\theta$ and $\utilde\beta$ are intermediate
+calculations that we can use to compute the penalized residual sum of
+squares (needed to profile out $\sigma$). Noting that:
+
+\begin{equation*}
+\utilde\theta^\top\utilde\theta +
+\utilde\beta^\top\utilde\beta =
+\begin{bmatrix}{\bf Y}^\top & 0 \end{bmatrix}
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0\end{bmatrix}
+\begin{bmatrix}\Lambda^\top {\bf Z}^\top {\bf Z}\Lambda + {\bf I} &
+  \Lambda{\bf Z}^\top{\bf X} \\
+{\bf X}^\top{\bf Z}\Lambda & {\bf X}\top{\bf X}
+\end{bmatrix}^{-1}
+\begin{bmatrix}\Lambda^\top{\bf Z}^\top & {\bf I} \\ {\bf X}^\top &
+  0 \end{bmatrix}
+\begin{bmatrix} {\bf Y} \\ 0\end{bmatrix}
+\end{equation*}.
+
+If this was a simple linear regression, we would write, ${\bf Y}^\top{\bf A}\left({\bf A}^\top{\bf
+    A}\right)^{-1}{\bf A}^\top{\bf Y} = {\bf Y}^\top{\bf A}\hat\beta$. But,
+
+\begin{align*}
+{\bf Y}^\top{\bf Y} - {\bf Y}^\top{\bf A}\hat\beta & =
+\bf{Y}^\top\left({\bf Y} - {\bf A}\hat\beta\right), \\
+& = \left({\bf Y} - {\bf A}\hat\beta\right)^\top\left({\bf Y} - {\bf
+    A}\hat\beta\right), \\
+& = \left\|{\bf Y} - {\bf A}\hat\beta\right\|^2.
+\end{align*}
+
+So that in our full model,
+
+\begin{equation*}
+\left\|
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix}
+-\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta\end{bmatrix}
+\right\|^2 =
+{\bf Y}^\top{\bf Y} - \utilde\theta^\top\utilde\theta -
+\utilde\beta^\top\utilde\beta.
+\end{equation*}
+
+Once we have obtained the modes of the joint distribution, we can proceed to
+integrate out the modeled coefficients.
+
+\begin{align*}
+p({\bf Y}, \theta \mid \Lambda, \beta, \sigma^2) & \propto
+(\sigma^2)^{-(N+Q)/2}\exp\left\{-\frac{1}{2\sigma^2}\left\|
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix}
+-\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\theta \\ \beta\end{bmatrix}
+\right\|^2\right\}, \\
+%
+&= 
+(\sigma^2)^{-(N+Q)/2}\exp\left\{-\frac{1}{2\sigma^2}\left[
+\begin{bmatrix}\theta-\tilde{\theta} \\ \beta -
+  \tilde\beta\end{bmatrix}^\top
+\begin{bmatrix}
+{\bf L}_Z & 0 \\ {\bf L}_{ZX} & {\bf L}_X \end{bmatrix}
+\begin{bmatrix}
+{\bf L}_Z^\top & {\bf L}_{ZX}^\top \\ 0 & {\bf L}_X^\top \end{bmatrix}
+\begin{bmatrix}\theta-\tilde{\theta} \\ \beta -
+  \tilde\beta\end{bmatrix} +
+\left\|
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix}
+-\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta\end{bmatrix}
+\right\|^2
+\right]\right\}.
+\end{align*}
+Considering just the parts that involve $\theta$ and rotating the
+covariance with $\beta$ into the mean, we have:
+\begin{equation*}
+(\sigma^2)^{-Q/2}\exp\left\{-\frac{1}{2\sigma^2}\left[
+\begin{bmatrix}\theta-\tilde{\theta} + {\bf L}_Z^{-\top}{\bf
+    L}_{ZX}^\top (\beta - \tilde\beta) \\ \beta -
+  \tilde\beta\end{bmatrix}^\top
+\begin{bmatrix}
+{\bf L}_Z & 0 \\ 0 & {\bf L}_X \end{bmatrix}
+\begin{bmatrix}
+{\bf L}_Z^\top &0 \\ 0 & {\bf L}_X^\top \end{bmatrix}
+\begin{bmatrix}\theta-\tilde{\theta} + {\bf L}_Z^{-\top}{\bf
+    L}_{ZX}^\top (\beta - \tilde\beta) \\ \beta -
+  \tilde\beta\end{bmatrix}
+\right]\right\}. \\
+\end{equation*}
+
+When integrated out, we obtain:
+
+\begin{equation*}
+p({\bf Y} \mid \Lambda, \beta, \sigma^2) \propto (\sigma^2)^{-N/2}|{\bf
+  L}_Z|^{-1}
+\exp\left\{-\frac{1}{2\sigma^2}\left[
+(\beta - \tilde\beta)^\top{\bf L}_X {\bf L}_X^\top(\beta - \tilde\beta) +
+\left\|
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix}
+-\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta\end{bmatrix}
+\right\|^2
+\right]\right\}.
+\end{equation*}
+
+From this, the MLE for $\beta$ is the joint mode,
+$\tilde\beta$. Profiling out $\beta$ gives us that the
+mode of $\sigma^2$ is $\frac{1}{N}\left[\|{\bf Y} - {\bf
+  Z}\Lambda\tilde\theta - {\bf X}\tilde\beta\|^2 +
+\|\tilde\theta\|^2\right]$, or the penalized residual sum of
+squares divided by the sample size. Finally, the fully profiled deviance is given by:
+
+\begin{equation*}
+d(\Lambda) = N\left(1 + \log(2\pi\hat\sigma^2)\right)+2\log|{\bf L}_Z|.
+\end{equation*}
+
+If we had wanted the REML, we can further take the likelihood and
+integrate out $\beta$ with a flat prior, leaving:
+
+\begin{equation*}
+p({\bf Y} \mid \Lambda, \sigma^2) = (2\pi)^{-(N-P)/2} (\sigma^2)^{-(N - P) / 2} |{\bf
+  L}_Z|^{-1} |{\bf L}_X|^{-1}\exp\left\{-\frac{1}{2\sigma^2}
+\left\|
+\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix}
+-\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta\end{bmatrix}
+\right\|^2
+\right\}.
+\end{equation*}
+
+Consequently, the REML estimate of $\sigma^2$ is the penalized,
+weighted residual sum of squares divided by $N - P$. The profiled
+deviance is
+
+\begin{equation*}
+d(\Lambda) = (N - P)\left(1 + \log(2\pi\hat\sigma^2)\right)+2\log|{\bf
+  L}_Z| + 2\log|{\bf L}_X|.
+\end{equation*}
+
+\newpage
+
+\section*{Penalized Weighted Residual Sum of Squares}
+
+As we add priors to the model, often times we will be able to optimize
+in a similar fashion as above. When we cannot, the two
+``profiling'' stages make up the difference. In addition, there are
+concepts that have utility in the simpler model that lack a self-evident
+generalization. \\
+
+As mentioned above, and in the lmer implementation, some emphasis is
+placed on the ``penalized weighted residual sum of squares''. This
+quantity is somewhat obvious in likelihood and it arises in the
+profiling, or estimation, of $\sigma$. Specifically, we have that
+\begin{equation*}
+L(\sigma, ...) =
+(\sigma^2)^{-\frac{\mathrm{df}}{2}}\exp\left\{-\frac{1}{2}\frac{1}{\sigma^2}\mathrm{PWRSS}
+\right\}
+\end{equation*}
+
+\noindent and  $\hat\sigma^2 = \frac{1}{\mathrm{df}}\mathrm{PWRSS}$,
+with `$\mathrm{df}$' being the appropriate degrees of freedom for the
+model. \\
+
+More natural than this is the ``weighted residual sum of
+squares'', which is the quantity $\|{\bf Y} -
+\bf{X}\hat\beta - {\bf Z}\hat\Lambda\hat\theta\|^2$ - possibly
+weighting each summed element. In this expression, hats over symbols represent our
+best estimate of that parameter or latent variable. Regardless of the
+model, ideally we would like
+this concept to remain consistent. Unfortunately, we will not always be so
+lucky but we can come close. \\
+
+From the likelihood, $\hat\beta$ is
+simply the maximum in $\beta$ and $\hat\theta$ is typically taken as the
+posterior mean, which itself is also the maximum of the joint
+distribution. In the REML case, we similarly estimate $\hat\beta$
+as the posterior mean, which is again the mode of the joint
+distribution. However, with the addition of priors, the marginal
+posterior distributions become complicated and it can no longer be expected
+that their means will coincide with the joint mode. Consequently, we
+instead calculate $\|{\bf Y} - {\bf X}\tilde\beta - {\bf
+Z}\tilde\Lambda\tilde\theta\|^2$, where the tildes correspond to the
+maximizers of the joint posterior. \\
+
+What the ``penalized'' version will mean will depend on the model and
+may or may not have as much meaning. In order to be consistent, we
+define the $\mathrm{PWRSS}$ as the term that ``touches''
+$\frac{1}{\sigma^2}$ in the exponent of the objective function. This
+will always contain the weighted residual sum of squares and a penalty
+term, but may not be the sole quantity needed to estimate
+$\sigma$. \\
+
+As it stands, marginal posterior means are not calculated at all
+beyond the simple cases in which they coincide with the maximizer of
+the joint distribution. If in the future this changes, then at that
+time the definition of the weighted residual sum of squares may also be updated.
+
+\newpage
+
+\section*{Unmodeled Coefficient Priors}
+
+For priors on $\beta$ we have a choice of whether or not it will be
+``on the common scale''. In general, we might wish to say something
+like ``$\beta$ is distributed joint-normally with a covariance of $10$
+times the identity matrix'', but if we decide to use the common scale
+that becomes the much more vague statement of ``$10$ times an estimate
+of the variance of ${\bf Y}$ times the identity matrix''. While
+lacking in definite-ness, using the common scale should dramatically
+speed up optimization.
+
+Regardless of the scale, for the Gaussian case the approach we will take
+is to fold in the prior into a sum of squares term as fake
+data. Specifically, we will go from
+$\left\| \begin{bmatrix}{\bf Y} \\ 0\end{bmatrix}
+-\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I}_Q &
+  0\end{bmatrix} \begin{bmatrix}\theta \\ \beta\end{bmatrix}
+\right\|^2$ to something like 
+$\left\| \begin{bmatrix}{\bf Y} \\ 0 \\ 0\end{bmatrix}
+-\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ 0 & \Sigma_\beta^{1/2} \\
+  {\bf I}_Q &
+  0\end{bmatrix} \begin{bmatrix}\theta \\ \beta\end{bmatrix}
+\right\|^2$. At that point, we find the joint mode in the coefficients
+just as before. \\
+
+For the time being, we only consider Gaussian priors. That may change
+at a later date, if there is sufficient demand.
+
+\section*{On the Common Scale}
+
+Supposing
+
+\begin{align*}
+{\bf Y} \mid \theta, \beta, \Lambda, \sigma &
+\sim
+N\left({\bf X}\beta + {\bf Z}\Lambda\theta, \sigma^2{\bf I}_N\right),
+\\
+\theta \mid \sigma & \sim N\left(0,
+  \sigma^2{\bf I}_Q\right), \\
+\beta \mid \sigma & \sim N\left(0,
+  \sigma^2\Sigma_\beta\right),
+\end{align*}
+
+\noindent with $\Sigma_\beta$ known and having decomposition ${\bf L}_\beta{\bf
+  L}_\beta^\top = \Sigma_\beta$. In this case, we have a joint
+distribution of
+
+\begin{align*}
+p\left({\bf Y}, \theta, \beta \mid \Lambda, \sigma\right) & \propto
+(\sigma^2)^{-(N+Q+P)/2}\exp\left\{
+-\frac{1}{2\sigma^2}\left[\left\|
+{\bf Y} - {\bf X}\beta - {\bf Z}\Lambda\theta\right\|^2 + \|\theta\|^2
++ \left\|{\bf L}_\beta^{-1}\beta\right\|^2
+\right]\right\}, \\
+% line 1-2 break
+& \propto (\sigma^2)^{-(N+Q+P)/2}
+\exp\left\{-\frac{1}{2\sigma^2}
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & {\bf L}_\beta^{-1} \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \theta \\ \beta \end{bmatrix}
+\right\|^2\right\},
+\end{align*}
+
+\noindent and we can proceed more or less as before. \\
+
+Specific changes included that ${\bf L}_X$
+becomes ${\bf L}_X{\bf L}_X^\top = {\bf X}^\top{\bf X} +
+\Sigma_\beta^{-1} - {\bf L}_{ZX}{\bf L}_{ZX}^\top$. The marginal
+posterior of $\beta$, obtained by maximizing the joint and integrating
+$\theta$ is:
+
+\begin{equation*}
+p(\beta \mid {\bf Y},  \Lambda, \sigma) \propto
+(\sigma^2)^{-\frac{N+P}{2}}|{\bf L}_Z|^{-1}
+\exp\left\{-\frac{1}{2\sigma^2}\left[(\beta - \tilde\beta)^\top{\bf L}_X{\bf
+    L}_X^\top(\beta - \tilde\beta) +
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & {\bf L}_\beta^{-1} \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2\right]
+\right\}.
+\end{equation*}
+
+The maximizer in $\beta$ is the same as the joint, so that through the
+mode we can calculate that the penalized weighted sum of squares is
+our augmented sum of squares, the degrees of freedom are $N+P$, and
+$\tilde\sigma^2$ is the first divded by the second. \\
+
+Instead we might prefer the likelihood, obtained by integrating out
+$\beta$. In this case we would have:
+
+\begin{equation*}
+p({\bf Y} \mid  \Lambda, \sigma) \propto
+(\sigma^2)^{-\frac{N}{2}}|{\bf L}_Z|^{-1}|{\bf L}_X|^{-1}
+\exp\left\{-\frac{1}{2\sigma^2}
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & {\bf L}_\beta^{-1} \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2
+\right\},
+\end{equation*}
+
+\noindent and similar considerations apply.
+
+\section*{Scale Free}
+
+The scale-free case is considerably more involved, although it starts
+out similarly. Here the full model is given by:
+\begin{align*}
+{\bf Y} \mid \theta, \beta, \Lambda, \sigma &
+\sim
+N\left({\bf X}\beta + {\bf Z}\Lambda\theta, \sigma^2{\bf I}_N\right),
+\\
+\theta \mid \sigma & \sim N\left(0,
+  \sigma^2{\bf I}_Q\right), \\
+\beta & \sim N\left(0,
+  \Sigma_\beta\right).
+\end{align*}
+Consequently, the joint distribution of the observations and the coefficients is proportional to:
+\begin{align*}
+p\left({\bf Y}, \theta, \beta \mid \Lambda, \sigma\right) & \propto
+(\sigma^2)^{-(N+Q+P)/2}\exp\left\{
+-\frac{1}{2\sigma^2}\left[\left\|
+{\bf Y} - {\bf X}\beta - {\bf Z}\Lambda\theta\right\|^2 + \|\theta\|^2
++ \left\|\sigma{\bf L}_\beta^{-1}\beta\right\|^2
+\right]\right\}, \\
+% line 1-2 break
+& \propto (\sigma^2)^{-(N+Q+P)/2}
+\exp\left\{-\frac{1}{2\sigma^2}
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & \sigma{\bf L}_\beta^{-1} \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \theta \\ \beta \end{bmatrix}
+\right\|^2\right\}.
+\end{align*}
+As before, we can take a block-wise Cholesky factorization of the
+augmented design matrix:
+\begin{align*}
+{\bf L}_Z{\bf L}_Z^\top & = \Lambda^\top{\bf Z}^\top{\bf Z}\Lambda +
+{\bf I}_Q, \\
+{\bf L}_{ZX} & = {\bf X}^\top{\bf Z}\Lambda{\bf L}_Z^{-\top}, \\
+{\bf L}_X(\sigma^2){\bf L}_X^\top(\sigma^2) & = {\bf X}^\top {\bf X} +
+\sigma^2\Sigma_\beta^{-1}
+- {\bf L}_{ZX}{\bf L}_{ZX}^\top.
+\end{align*}
+Proceeding as before by calculating the joint mode and integrating
+with respect to $\theta$ produces:
+\begin{multline*}
+p({\bf Y}, \beta \mid \Lambda, \sigma) \propto
+(\sigma^2)^{-(N+P)/2}|{\bf L}_Z|^{-1}
+\exp\left\{-\frac{1}{2\sigma^2}\left[
+(\beta - \tilde\beta(\sigma))^\top{\bf L}_X(\sigma){\bf L}_X^\top(\sigma)
+(\beta - \tilde\beta(\sigma)) \right]\right\} \times\\
+% 
+\exp\left\{-\frac{1}{2\sigma^2}\left[
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & \sigma{\bf L}^{-1}_\beta \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \tilde\theta(\sigma) \\ \tilde\beta(\sigma) \end{bmatrix}
+\right\|^2\right]\right\}.
+\end{multline*}
+If we are interested in maximizing the posterior mode, $\beta \mid
+{\bf Y}, \Lambda, \sigma^2$, we can see that for any fixed value of
+$\sigma$ and $\Lambda$, the mode in $\beta$ will be the same as the
+joint. Consequently, the profiled posterior is:
+\begin{equation*}
+p(\tilde{\beta} \mid {\bf Y}, \Lambda, \sigma) \propto
+(\sigma^2)^{-(N+P)/2}|{\bf L}_Z|^{-1}
+\exp\left\{-\frac{1}{2\sigma^2}
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & \sigma{\bf L}^{-1}_\beta \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \tilde\theta(\sigma) \\ \tilde\beta(\sigma) \end{bmatrix}
+\right\|^2
+\right\}.
+\end{equation*}
+If, however, we are interested in the likelihood, we can obtain it by
+integrating out $\beta$ from the joint. The result is:
+\begin{equation*}
+p({\bf Y} \mid \Lambda, \sigma) =
+(\sigma^2)^{-N/2}|{\bf L}_Z|^{-1}
+|{\bf L}_X(\sigma)|^{-1}
+\exp\left\{-\frac{1}{2\sigma^2}
+\left\|
+\begin{bmatrix}{\bf Y} \\ 0 \\ 0 \end{bmatrix} -
+\begin{bmatrix}{\bf Z}\Lambda & {\bf X} \\
+0 & \sigma{\bf L}^{-1}_\beta \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix} \tilde\theta(\sigma) \\ \tilde\beta(\sigma) \end{bmatrix}
+\right\|^2
+\right\}.
+\end{equation*}
+
+I have chosen to highlight the dependencies on $\sigma$ above as we
+typically numerically optimize over $\Lambda$, and had previously been
+able to profile out $\sigma$. Since we can no longer do that, the
+goal will be to be able to brute-force optimize over $\sigma$,
+conditioned on the hyper-parameters. For this, we use Newton's method,
+requiring the first and second derivatives of the objective function. \\
+
+Also as before, we can write the sum of squares in terms of
+the intermediate calculations - ${\bf Y}^\top{\bf Y} -
+\utilde\theta^\top\utilde\theta -
+\utilde\beta^\top(\sigma)\utilde\beta(\sigma)$ - which simplifies calculating the
+derivative of the log-posterior or log-likelihood. Starting with the log-posterior,
+
+\begin{equation*}
+\frac{\partial}{\partial\sigma}l(\hat\beta \mid {\bf Y}, \Lambda,
+\sigma) = 
+-(N+P)\frac{1}{\sigma} + \frac{1}{\sigma^3}\left({\bf Y}^\top{\bf
+    Y}-\utilde\theta^\top\utilde\theta
+  -\utilde\beta^\top(\sigma)\utilde\beta(\sigma)\right) + 
+\frac{1}{2\sigma^2}\frac{\partial}{\partial\sigma}\utilde\beta^\top(\sigma)\utilde\beta(\sigma).
+\end{equation*}
+Where $\utilde\beta(\sigma) = {\bf L}_X^{-1}(\sigma)\left({\bf
+    X}^\top{\bf Y} - {\bf L}_{ZX}\utilde\theta\right)$ and
+$\utilde\theta = {\bf L}_Z^{-1}\Lambda^\top{\bf Z}^\top{\bf Y}$. From this, we have
+\begin{equation*}
+\utilde\beta^\top(\sigma)\utilde\beta(\sigma) = 
+\left({\bf X}^\top{\bf Y} - {\bf L}_{ZX}\utilde\theta\right)^\top
+{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma)\left({\bf X}^\top{\bf Y} - {\bf
+    L}_{ZX}\utilde\theta\right).
+\end{equation*}
+
+Noting that ${\bf L}_X^{-\top}{\bf
+  L}_X^{-1} = \left({\bf L}_X{\bf L}_X^\top\right)^{-1} = \left({\bf
+      X}^\top{\bf X} + \sigma^2\Sigma_\beta^{-1} - {\bf
+      L}_{ZX}{\bf L}_{ZX}^\top\right)^{-1}$, we let $a = {\bf X}^\top{\bf Y} - {\bf
+  L}_{ZX}\utilde\theta$ and ${\bf S} = {\bf X}^\top{\bf X} - {\bf
+  L}_{ZX}{\bf L}_{ZX}^\top$. We can write
+
+\begin{align*}
+\utilde\beta^\top(\sigma)\utilde\beta(\sigma) &= a^\top\left({\bf S} +
+  \sigma^2\Sigma^{-1}_\beta\right)^{-1}a, \\
+& = a^\top{\bf L}_\beta\left({\bf L}_\beta^\top{\bf S}{\bf L}_\beta +
+\sigma^2{\bf I}_P\right)^{-1}{\bf L}_\beta^\top a.
+\end{align*}
+
+For the sake of computing the derivative, we further make the notational
+simplifications of $b = {\bf
+  L}_\beta^\top a$ and ${\bf R} = {\bf L}_\beta^\top{\bf S}{\bf L}_\beta$.
+
+\begin{align*}
+H(\sigma) & = G(F(\sigma)), \\
+G({\bf D}) & = b^\top {\bf D}^{-1} b, \\
+F(\sigma) & = {\bf R} + \sigma^2{\bf I}_P, \\
+\frac{\mathrm{d}}{\mathrm{d}\sigma}
+H(\sigma) & =
+\frac{\mathrm{d}\,\mathrm{vec}(G({\bf D}))}{\mathrm{d}\,
+  \mathrm{vec}({\bf D})^\top}
+\frac{\mathrm{d}\,\mathrm{vec}(F(\sigma))}{\mathrm{d}\sigma}, \\
+%
+\frac{\mathrm{d}}{\mathrm{d}\sigma}\mathrm{vec}(F(\sigma)) & =
+2\sigma\mathrm{vec}({\bf I}_P), \\
+%
+\frac{\mathrm{d}}{\mathrm{d}\,\mathrm{vec}({\bf D})^\top}
+\mathrm{vec}(G({\bf D})) & = -\mathrm{vec}\left({\bf D}^{-\top} b
+b^\top {\bf D}^{-\top}\right)^\top.
+\end{align*}
+
+To help clarify this a bit, as $F$ maps a scalar to a $Q\times Q$
+matrix, its derivative is a $Q^2\times 1$ matrix. As $G$ maps
+$Q\times Q$ matrix to a scalar, its derivative is a $1\times Q^2$
+matrix. When we multiply the two in the chain rule, we get the desired
+scalar derivative. \\
+
+Furthermore, as $\mathrm{d}F/\mathrm{d}\sigma$
+involves vectorizing the identity matrix, we are going to add from
+the derivative of $G$ the elements that correspond to the diagonal. As
+such, we can express the derivative as:
+
+\begin{align*}
+\frac{\mathrm{d}}{\mathrm{d}\sigma}
+H(\sigma) & = -2\sigma\times \mathrm{tr}\left(\left({\bf
+    R} + \sigma^2{\bf I}_P\right)^{-\top}b b^\top \left({\bf
+    R} + \sigma^2{\bf I}_P\right)^{-\top}\right), \\
+& = -2\sigma b^\top \left({\bf
+    R} + \sigma^2{\bf I}_P\right)^{-1} \left({\bf
+    R} + \sigma^2{\bf I}_P\right) ^{-1} b, \\
+& = -2\sigma a^\top {\bf L}_\beta\left({\bf L}_\beta^\top{\bf S}{\bf
+    L}_\beta + \sigma^2{\bf I}_P\right)^{-1}\left({\bf L}_\beta^\top{\bf S}{\bf
+    L}_\beta + \sigma^2{\bf I}_P\right)^{-1}{\bf L}_\beta^\top a, \\
+& = -2\sigma a^\top\left({\bf S} +
+  \sigma^2\Sigma_\beta^{-1}\right)^{-1} {\bf L}_\beta^{-\top}{\bf
+  L}_\beta^{-1} \left({\bf S} +
+  \sigma^2\Sigma_\beta^{-1}\right)^{-1} a, \\
+& = -2\sigma \utilde\beta^\top(\sigma){\bf L}_X^{-1}(\sigma){\bf
+  L}_\beta^{-\top} {\bf L}_\beta^{-1} {\bf L}_X^{-\top}(\sigma)
+\utilde\beta(\sigma), \\
+& = -2\sigma \left\|{\bf L}_\beta^{-1}{\bf
+  L}_X^{-\top}(\sigma)\utilde{\beta}(\sigma) \right\|^2.
+\end{align*}
+
+Summing up, the first derivative is given by:
+
+\begin{equation*}
+\frac{\partial}{\partial\sigma} l(\hat\beta \mid {\bf Y}, \Lambda,
+\sigma ) = -(N+P)\frac{1}{\sigma} + \frac{1}{\sigma^3}\left({\bf Y}^\top{\bf
+    Y}-\utilde\theta^\top\utilde\theta
+  -\left\|\utilde\beta(\sigma)\right\|^2\right) -
+\frac{1}{\sigma}\left\|{\bf L}_\beta^{-1}{\bf
+  L}_X^{-\top}(\sigma)\utilde{\beta}(\sigma) \right\|^2.
+\end{equation*}
+
+By similar computation, the second derivative is given by:
+\begin{multline*}
+\frac{\partial^2}{(\partial\sigma)^2}
+l(\hat\beta \mid {\bf Y}, \Lambda, \sigma) =
+(N+P) \frac{1}{\sigma^2} - \frac{3}{\sigma^4} \left({\bf Y}^\top{\bf
+    Y}-\utilde\theta^\top\utilde\theta
+  -\left\|\utilde\beta(\sigma)\right\|^2\right) +
+\frac{3}{\sigma^2}\left\| {\bf L}_\beta^{-1}{\bf
+    L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2 + \\
+4\left\| {\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-\top} {\bf L}_\beta^{-1}{\bf
+    L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2.
+\end{multline*}
+
+We have written in this fashion to highlight how might compute the
+various derivatives efficiently. If one caches ${\bf X}^\top{\bf X} -
+{\bf L}_{ZX}{\bf L}_{ZX}^\top$, for a new value of $\sigma$ one can
+efficiently compute the new ${\bf L}_X(\sigma)$. With this value, and
+having also cached ${\bf X}^\top{\bf Y} -
+{\bf L}_{ZX}\utilde\theta$, the new $\utilde\beta$ is, as before, ${\bf L}_X^{-1}(\sigma)\left({\bf X}^\top{\bf Y} -
+{\bf L}_{ZX}\utilde\theta\right)$. \\
+
+Then, one only needs to compute $\|\utilde\beta\|^2$, $\|{\bf
+  L}_\beta^{-1}{\bf L}_X^{-\top}\utilde\beta\|^2$, and $\|{\bf
+  L}_X^{-1}{\bf L}_\beta^{-\top}{\bf
+  L}_\beta^{-1}{\bf L}_X^{-\top}\utilde\beta\|^2$. \\
+
+To obtain the derivative for the case in which the unmodeled
+coefficients are integrated out, we have to be able to take the
+derivative of $|{\bf L}_X(\sigma)|$. Noting that, for an arbitrary
+matrix ${\bf A}$,
+\begin{align*}
+\frac{\mathrm{d}|{\bf A}|}{\mathrm{d}\mathrm{vec}({\bf A})^\top} & =
+|{\bf A}|\mathrm{vec}({\bf A}^{-\top})^\top, \\
+\frac{\mathrm{d}|{\bf A}(\sigma)|}{\mathrm{d}\sigma} & = |{\bf A}|\mathrm{vec}({\bf
+  A}^{-\top})^\top \frac{\mathrm{d}{\bf A}}{\mathrm{d}\sigma}.
+\end{align*}
+Consequently, using our previous definition of {\bf R},
+\begin{align*}
+\frac{\mathrm{d}}{\mathrm{d}\sigma}|{\bf L}_X(\sigma)| & = \frac{1}{2}
+\frac{\mathrm{d}}{\mathrm{d}\sigma}\left|{\bf
+    L}_\beta^{-\top}\left({\bf R}+\sigma^2{\bf I}_P\right){\bf
+    L}_\beta^{-1}\right|, \\
+& = \frac{1}{2} \left|\Sigma_\beta^{-1}\right|\frac{\mathrm{d}}{\mathrm{d}\sigma} 
+\left|{\bf R}+\sigma^2{\bf I}_P\right|, \\
+& = \frac{1}{2} \left|\Sigma_\beta^{-1}\right|\left|{\bf R}+\sigma^2{\bf
+    I}_P\right| \mathrm{vec}\left(\left({\bf R}+\sigma^2{\bf
+    I}_P\right)^{-1}\right)^{\top} \times 2\sigma\mathrm{vec}({\bf
+I}_P), \\
+& = \sigma \left|\Sigma_\beta^{-1}\right|\left|{\bf R}+\sigma^2{\bf
+    I}_P\right| \mathrm{tr}\left({\bf R}+\sigma^2{\bf
+    I}_P\right)^{-1}, \\
+& = \sigma\left|{\bf L}_X(\sigma)\right|\mathrm{tr}\left({\bf
+    L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-T}\right).
+\end{align*}
+
+The first derivative of the log-likelihood is then:
+
+\begin{multline*}
+\frac{\partial}{\partial\sigma} l({\bf Y} \mid \Lambda,
+\sigma ) = -N\frac{1}{\sigma} + \frac{1}{\sigma^3}\left({\bf Y}^\top{\bf
+    Y}-\utilde\theta^\top\utilde\theta
+  -\left\|\utilde\beta(\sigma)\right\|^2\right) -
+\frac{1}{\sigma}\left\|{\bf L}_\beta^{-1}{\bf
+  L}_X^{-\top}(\sigma)\utilde{\beta}(\sigma) \right\|^2 - \\
+\sigma\times\mathrm{tr}\left({\bf
+    L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-T}\right).
+\end{multline*}
+
+Now we utilize the fact that
+$\frac{\mathrm{d}}{\mathrm{d}\sigma}\mathrm{tr}({\bf A}) =
+\mathrm{tr}\left(\frac{\mathrm{d}}{\mathrm{d}\sigma} {\bf A}\right)$
+to compute:
+\begin{align*}
+\frac{\mathrm{d}}{\mathrm{d}\sigma}\mathrm{tr} \left({\bf
+    R}+\sigma^2{\bf I}_P\right)^{-1}  & =
+-2\sigma\times\mathrm{tr} \left(\left({\bf R}+\sigma^2{\bf I}_P\right)^{-1}\left({\bf
+      R}+\sigma^2{\bf I}_P\right)^{-1} \right), \\
+& = -2\sigma\times\mathrm{tr} \left( \left({\bf
+    L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf
+    L}_\beta^{-T} \right)^2  \right).
+\end{align*}
+
+Putting this together, we have:
+\begin{multline*}
+\frac{\partial^2}{(\partial\sigma)^2} l({\bf Y} \mid \Lambda,
+\sigma ) = N \frac{1}{\sigma^2} - \frac{3}{\sigma^4} \left({\bf Y}^\top{\bf
+    Y}-\utilde\theta^\top\utilde\theta
+  -\left\|\utilde\beta(\sigma)\right\|^2\right) +
+\frac{3}{\sigma^2}\left\| {\bf L}_\beta^{-1}{\bf
+    L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2 + \\
+4\left\| {\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-\top} {\bf L}_\beta^{-1}{\bf
+    L}_X^{-\top}(\sigma)\utilde\beta(\sigma) \right\|^2 -
+\mathrm{tr}\left({\bf
+    L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf
+    L}_\beta^{-T}\right) + 2\sigma^2\times\mathrm{tr}\left( \left( {\bf
+    L}_\beta^{-1}{\bf L}_X^{-\top}(\sigma){\bf L}_X^{-1}(\sigma){\bf L}_\beta^{-T}\right)^2 \right).
+\end{multline*}
+
+To compute these traces, we will already have access to the the matrix
+product ${\bf L}_\beta^{-1}{\bf L}_X^{-\top}$. The trace of ${\bf
+  A}{\bf A}^\top$ is just the sum of the squares of the elements of
+that matrix, but it seems unavoidable for us to at least consider the
+product ${\bf L}_\beta^{-1}{\bf L}_X^{-\top}{\bf L}_X^{-1}{\bf
+  L}_\beta^{-\top}$. With this, we can compute the first order trace
+by summing down the diagonal, and the second by summing the squares of
+the elements. For many models, ${\bf L}_\beta^{-1}$ is diagonal, so
+that ${\bf L}_\beta^{-1}{\bf L}_X^{-\top}$ is triangular and the
+crossproduct can be computed efficiently. \\
+
+With this prior, the penalized weighted sum of squares is given by
+just
+$\|{\bf Y} - {\bf X}\tilde\beta - {\bf Z}\tilde\Lambda\tilde\theta\|^2 +
+\|\tilde\theta\|^2$, while during evaluation we compute the quantity
+
+\begin{equation*}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \\ 0\end{bmatrix}
+- 
+\begin{bmatrix}
+{\bf Z}\Lambda & {\bf X} \\
+0 & \tilde\sigma {\bf L}_\beta^{-1} \\
+{\bf I}_Q & 0
+\end{bmatrix}
+\begin{bmatrix}
+\tilde\theta(\tilde\sigma) \\ \tilde\beta(\tilde\sigma)
+\end{bmatrix} \right\|^2.
+\end{equation*}
+
+To get what we need, we take this final quantity and add back
+$\tilde\sigma^2\tilde\beta^\top\Sigma_\beta^{-1}\tilde\beta$. To
+obtain the weighted sum of squares, we further add $\|\tilde\theta\|^2$.
+
+\newpage
+
+\section*{Common Scale Priors}
+
+Now we wish to expand the above to priors on $\sigma$. So long as we
+are willing to optimize numerically, any kind of prior is acceptable,
+although in certain cases we will be able to profile $\sigma$ as the
+solution to a linear or quadratic equation. \\
+
+As an aside, optimization in $\sigma$ is not concave when we have a
+prior over $\beta$ that depends on it, but tends to have a region of concavity
+containing the mode followed by a convex tail the asymptotes without
+producing another extremum. This is mostly
+conjecture, but it is born out by experience. Adding priors to
+$\sigma$ may make optimization even more difficult.
+
+\subsection*{Inverse Gamma Prior}
+
+First we consider conjugacy, which requires an inverse gamma prior on $\sigma^2$. Supposing then
+that $\sigma^2 \sim \mathrm{Inv}-\Gamma(\alpha, \tau)$, we have in the default model:
+
+\begin{equation*}
+p(\sigma^2 \mid {\bf Y}, \Lambda, \beta) \propto
+(\sigma^2)^{-(N/2 + \alpha + 1)}\left|{\bf L}_Z\right|^{-1}
+\exp\left\{-\frac{1}{\sigma^2}\left[
+\frac{1}{2}(\beta - \tilde\beta)^\top{\bf L}_X{\bf L}_X^\top(\beta -
+\tilde\beta) + \frac{1}{2}
+\left\|\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix} -
+\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix} \right\|^2 +
+\tau
+\right]\right\}.
+\end{equation*}
+
+At this point, one can profile out $\beta$ as usual, and consider the posterior
+through its mode as a function of $\Lambda$ by setting $\tilde{\sigma}^2
+= \frac{1}{N+ 2\alpha + 2}\left[\|{\bf Y} - {\bf Z}\Lambda\tilde\theta
+  - {\bf X}\tilde\beta\|^2 + \|\tilde\theta\|^2 + 2\tau\right]$. \\
+
+The corresponding ``deviance'' is:
+
+\begin{equation*}
+d(\Lambda) = (N + 2\alpha + 2)\left(1 + \log(2 \pi\tilde\sigma^2)\right)
++ 2 \log\left|{\bf L}_Z\right|.
+\end{equation*}
+
+Using a REML approach,
+
+\begin{equation*}
+p(\sigma^2 \mid {\bf Y}, \Lambda) \propto (\sigma^2)^{-(N - P)/2 -
+  \alpha - 1} \left|{\bf L}_Z\right|^{-1} \left|{\bf L}_X\right|^{-1}
+\exp\left\{-\frac{1}{\sigma^2}\left[ \frac{1}{2}
+\left\|\begin{bmatrix} {\bf Y} \\ 0 \end{bmatrix} -
+\begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} & 0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix} \right\|^2 +
+\tau
+\right]\right\}.
+\end{equation*}
+
+$\tilde\sigma^2$ is obtained similarly, and the associated objective function is
+
+\begin{equation*}
+d(\Lambda) = (N - P + 2\alpha + 2)\left(1 + \log(2 \pi\tilde\sigma^2)\right)
++ 2 \log\left|{\bf L}_Z\right| + 2\log\left|{\bf L}_X\right|.
+\end{equation*}
+
+In these cases, the penalized and regular weighted sums of squares are
+straightforward from our definition.
+
+\subsection*{Other, Simple Priors}
+
+Supposing that we have a non-conjugate but simple exponential family
+prior on $\sigma$, say one of $\sigma \sim \Gamma$, $\sigma^2 \sim
+\Gamma$, or $\sigma \sim \mathrm{Inv}-\Gamma$, we may have simple profiling
+situation available. Specifically:
+
+\begin{align*}
+\sigma^2 & \sim \Gamma(\alpha, \tau) \\
+p(\sigma^2 \mid {\bf Y}, \Lambda, \tilde\beta) & \propto
+(\sigma^2)^{-(N -2\alpha +
+  2)/2}\exp\left\{-\frac{1}{2}\frac{1}{\sigma^2}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2-\tau\sigma^2\right\}, \\
+%
+0& = -\frac{N-2\alpha +
+  2}{2}\frac{1}{\tilde\sigma^2}+\frac{1}{2}\frac{1}{\tilde\sigma^4}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2 - \tau, \\
+%
+\tilde\sigma^2 & = \dfrac{\sqrt{\mathrm{df}^2 + 8\tau\mathrm{PWRSS}} - \mathrm{df}}{4\tau}.
+\end{align*}
+
+\noindent In addition:
+
+\begin{align*}
+\sigma &\sim \mathrm{Inv}-\Gamma(\alpha, \tau), \\
+p(\sigma \mid {\bf Y}, \Lambda, \tilde\beta) & \propto
+\sigma^{-(N+ \alpha + 1)} \exp\left\{-\frac{1}{2}\frac{1}{\sigma^2}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2 - \tau\frac{1}{\sigma}\right\}, \\
+0 & = -(N + \alpha + 1)\frac{1}{\tilde\sigma} 
++\frac{1}{\tilde\sigma^3}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2
++ \tau\frac{1}{\tilde\sigma^2}, \\
+\tilde\sigma & = \dfrac{\sqrt{\tau^2 +
+    4\mathrm{df}\times\mathrm{PWRSS}}+\tau}{2\mathrm{df}}.
+\end{align*}
+
+For $\sigma \sim \Gamma$, the resultant estimating equation is cubic
+in $\sigma$, so that the maximizer is more difficult (albeit not
+impossible) to write down.
+
+\newpage
+
+\section*{Covariance Priors}
+
+When we place a prior over $\Sigma = \Lambda\Lambda^\top$, we have a
+choice of whether or not we should include the common scale. The
+model, as we choose to optimize, is effectively:
+
+\begin{align*}
+{\bf Y} \mid \theta', \beta, \sigma^2 & \sim
+N({\bf X}\beta + {\bf Z}\theta', \sigma^2 \mathrm{I}_N), \\
+\theta' \mid \Sigma, \sigma^2 & \sim N(0, \sigma^2\Sigma),
+\end{align*}
+
+\noindent with the only difference in the actual implementation that
+we operate on a left-factor of $\Sigma$ and ``spherical'' random
+effects. \\ \\
+
+The question at hand is whether we want to place a prior over
+$\sigma^2\Sigma$ - the ``marginal'' or real-world covariance of the
+hierarchical component - or simply $\Sigma$ itself. The first might
+make more sense, the second is computationally more convenient: if the prior is directly on $\Sigma$, we need merely penalize the
+likelihood at the end of an evaluation step, while if the prior is over
+the product we have to modify the objective function in terms of
+$\sigma$.
+
+\subsection*{Direct Priors}
+
+The simplest examples of priors on the common scale are ones directly
+on the matrix $\sigma^2\Sigma$. Suppose:
+
+\begin{align*}
+\sigma^2\Sigma_k & \sim \mathrm{Inv-Wishart}(\nu, \Psi), \\
+p(\sigma^2 \mid {\bf Y}, \Lambda, \tilde\beta) & \propto
+(\sigma^2)^{-\frac{N+Q_k(\nu + Q_k + 1)}{2}}
+\exp\left\{-\frac{1}{2}\frac{1}{\sigma^2} \left[
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2
++ \mathrm{tr}(\Psi\Sigma_k^{-1})\right]\right\}.
+\end{align*}
+
+\noindent In this case, $\sigma^2$ can be profiled linearly, as
+before. \\
+
+With the Wishart, we have:
+
+\begin{align*}
+\sigma^2\Sigma_k & \sim \mathrm{Wishart}(\nu, \Psi), \\
+p(\sigma^2 \mid {\bf Y}, \Lambda, \tilde\beta) & \propto
+(\sigma^2)^{-\frac{N-Q_k(\nu - Q_k - 1)}{2}}
+\exp\left\{-\frac{1}{2}\frac{1}{\sigma^2}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2
++ \sigma^2\mathrm{tr}(\Psi^{-1}\Sigma_k)\right\}.
+\end{align*}
+
+\noindent This leads to the quadratic optimization found with the
+Gamma prior over $\sigma^2$ above.
+
+\subsection*{Correlation Decomposition}
+
+The issue of possible decompositions of $\Sigma$ further complicates
+this issue. In our ``Correlation'' decomposition, we have
+that $\Sigma_k = {\bf S}_k{\bf R}_k{\bf S}_k$, ${\bf S}_k$ a diagonal matrix of standard
+deviations and ${\bf R}_k$ a correlation matrix. To place a prior over
+this, we typically assume independent priors over the elements of
+${\bf S}_k$ and ${\bf R}_k$ itself. Consequently, to fold in $\sigma$, we
+would take all of the priors over the elements of ${\bf S}_k$ and make
+them over $\sigma{\bf S}-K$ instead. In this formulation, the effect is
+not much different than placing a prior directly over $\Sigma_k$ as with
+the Wishart and inverse Wishart above, however, due to the difficulty
+in optimizing over the space of correlation matrices, we tend to let
+${\bf R}_k$ be any positive definite matrix. I'm not yet sure of the
+consequences of this approach. \\
+
+A final point on the correlation decomposition is that we permit
+priors over the elements of ${\bf S}_k$ on the scale of either standard
+deviations or variances. At present, we can have independent gamma and inverse
+gamma distributions on $s_{jk}$ and $s_{jk}^2$, placing us in any and
+all of the situations described in the common-scale priors section.
+
+\subsection*{Spectral Decomposition}
+
+The spectral decomposition is similar to the correlation one without
+the ambiguity introduced by non-identifability. We take
+$\Sigma_k = {\bf U}_k{\bf D}_k{\bf U}_k^\top$, ${\bf U}_k$ special
+orthogonal and ${\bf D}_k$ diagonal and positive. As we only care
+about pulling the eigenvalues away from $0$, we do not penalize ${\bf
+  U}_k$ in any way but instead place independent priors on the
+elements of ${\bf D}_k$. All of the scale weight from $\sigma$
+must then be folded into ${\bf D}_k$. By again leaving open the
+question of whether or not the prior should be on the scale of a
+standard deviation or a variance and by permitting the use of gamma
+and inverse gamma distributions, we obtain a mix of all 4 possible
+exponential forms.
+
+\subsection*{Summary}
+
+Through the process of mix-and-matching, we may have an objective function
+of the form:
+
+\begin{equation*}
+p(\sigma \mid {\bf Y}, \Lambda, \tilde\beta) \propto
+(\sigma^2)^{-\mathrm{df}/2} \exp\left\{
+-\frac{1}{\sigma^2}\left[\frac{1}{2}
+\left\|\begin{bmatrix}{\bf Y} \\ 0 \end{bmatrix}
+- \begin{bmatrix} {\bf Z}\Lambda & {\bf X} \\ {\bf I} &
+  0 \end{bmatrix}
+\begin{bmatrix}\tilde\theta \\ \tilde\beta \end{bmatrix}
+\right\|^2
++C_1\right]-\frac{1}{\sigma}C_2-\sigma^2C_3-\sigma C_4
+\right\}
+\end{equation*}
+
+To compute each constant, we will have to sum over each component
+prior for each factor, and the effective degrees of freedom will
+similarly be a derived from a collection of sources.
+
+\end{document}

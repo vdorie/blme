@@ -1,0 +1,8 @@
+High Priority:
+  sim for ranef covariance
+
+Medium Priority:
+  investigate overdispersed models
+
+Low Priority:
+  Consider optimal scaling for random effect covariances

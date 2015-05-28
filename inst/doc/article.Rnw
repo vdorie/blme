@@ -1,0 +1,1648 @@
+\documentclass[article,shortnames]{jss}
+
+\usepackage{amsmath}
+\usepackage[utf8x]{inputenc}
+
+\newcommand{\TODO}[1]{{\color{red} TODO: #1}}
+
+\graphicspath{ {./img/} }
+\setkeys{Gin}{width=2.75in,keepaspectratio}
+
+<<echo=FALSE>>=
+
+require(blme)
+
+sourceDir <- "R"
+source(file.path(sourceDir, "util.R"))
+source(file.path(sourceDir, "display.R"))
+
+makeOrCheckDir(imgDir <- "img")
+makeOrCheckDir(dataDir <- "data")
+
+
+## if these are changed, the image directory will need to be
+## emptied before new graphs are made
+defaultImgHeight <- 2.75
+defaultImgWidth <- 2.75
+defaultPars <- list(mar = c(2.2, 2.2, 2.0, 0.1), mgp = c(1.1, 0.2, 0.0),
+                    cex = 0.9, cex.main = 1.0, cex.axis = 0.85, 
+                    cex.lab = 1.0, cex.sub = 1.0, pch = 20,
+                    bty = "l", tck = -0.0125)
+@ 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% declarations for jss.cls %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\author{Vincent Dorie\\New York University}
+\title{\pkg{blme}: Profiled Maximum A Posteriori Estimation of
+  Bayesian Linear Mixed Effects Models in \proglang{R}}
+
+\Plainauthor{Vincent Dorie}
+\Plaintitle{blme: Profiled Maximum A Posteriori Estimation of
+  Bayesian Linear Mixed Effects Models in R}
+\Shorttitle{\pkg{blme}: Bayesian Linear Mixed Effects in \proglang{R}}
+
+\Abstract{
+  The popular \proglang{R} package \pkg{lme4} allows the fast fitting
+  of linear and generalized linear mixed effect models through the use
+  of a profiled likelihood function. This article details
+  Bayesian, or penalized-likelihood, extensions that
+  enable a wider class of models to be fit while preserving
+  computational efficiency. The package \pkg{blme}, also for
+  \proglang{R}, implements a wide variety of these models while
+  inheriting functionality from \pkg{lme4}. Projected uses include the
+  incorporation of substantive prior information, regularization of
+  fixed effects, meta analysis, and the use of weakly informative
+  priors to obtain non-degenerate random effect covariance matrix estimates.
+}
+\Keywords{Bayesian, penalized likelihood, mixed effects, \pkg{blme}, \pkg{lme4}, \proglang{R}}
+\Plainkeywords{Bayesian, penalized likelihood, mixed effects, blme, lme4, R}
+
+%% publication information
+%% NOTE: Typically, this can be left commented and will be filled out by the technical editor
+%% \Volume{50}
+%% \Issue{9}
+%% \Month{June}
+%% \Year{2012}
+%% \Submitdate{2012-06-04}
+%% \Acceptdate{2012-06-04}
+
+%% The address of (at least) one author should be given
+%% in the following format:
+\Address{
+  Vincent Dorie\\
+  Department of Humanities and Social Sciences in the Professions \\
+  Postdoctoral fellow at the Center for the Promotion of Research Involving
+  Innovative Statistical Methodology \\
+  New York University \\
+  246 Greene St, Rm 318E \\
+  New York, NY 10003, USA
+  E-mail: \email{vjd4@nyu.edu}\\
+  URL: \url{http://buildmeawebpagesomeday/}
+}
+
+%% \usepackage{Sweave.sty}
+
+%% end of declarations %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{document}
+
+
+\section[Introduction]{Introduction}
+
+History, references for lmm, glmms. AKA.
+
+Proof of popularity? Popularity of lme4?
+
+lmms lme4 profiles; analysis of profiling technique shows what
+additional models can fit
+
+map, penalized likelihood; meta analysis, ridge regression; boundary estimates
+
+competing packages
+
+things you can do, not whether or not you should do them
+
+\section[Profiled likelihood and lme4]{Profiled likelihoods and linear
+  mixed models}
+
+In the next few sections, we derive Bayesian extensions / likelihood penalties that
+can be applied to the linear mixed model fit by \pkg{lme4} with little to no
+additional computation cost. To do so, we first trace through the
+calculations that \pkg{lme4} uses to profile the likelihood and avoid
+costly numeric optimization techniques, after which the modifications
+are introduced. A few relevant concepts, such as common scale parameters and
+REML estimation are introduced as well. When comparing two equations where one has
+been altered to incorporate a prior, the key differences are highlighted in
+{\color{blue}blue} text.
+
+We also note that this section applies only
+to {\em linear} mixed models. It is the approach of profiling that
+makes adding priors difficult, and as generalized linear mixed models
+in \pkg{lme4} are fit without profiling, priors are considerably easier to
+implement. They are briefly discussed in section \ref{sec:glmms}.
+
+\subsection[lme4 linear mixed model specification]{\pkg{lme4} linear mixed model specification}
+
+In concise, matrix notation the linear mixed effect model fit by \pkg{lme4} can be written as
+
+\begin{align}
+  \label{eq:conditionalModel}
+  y\mid b & \sim \mathcal{N}(X\beta + Zb, \sigma^2 I_n), \nonumber \\
+  b & \sim \mathcal{N}(0, \sigma^2\Sigma),
+\end{align}
+
+\noindent where $X$ and $Z$ are matrices of suitable dimension,
+$\beta$ are the fixed effects, $b$ are the random effects, $\sigma^2$
+is the residual variance or ``common scale'' parameter, and $\Sigma$
+is the covariance of the random
+effects. Furthermore, $Z$ and $\Sigma$ are sparse, as $Z$ serves to
+select the specific random effects that are applicable to an
+observation and the random effects are independent between groups and
+grouping factors. The structure of $\Sigma$ is irrelevant to maximum
+likelihood so we ignore it for the moment, although it is explored
+in-depth in section \ref{sec:bmath:covPriors} when random effect
+covariance priors are considered. As $b$ is latent, integrating it out yields the marginal
+model wherein
+
+\begin{equation}
+  \label{eq:marginalModel}
+  y \sim \mathcal{N}(X\beta, \sigma^2 I_n + \sigma^2 Z \Sigma Z^\top),
+\end{equation}
+
+\noindent subject to the constraint that $\Sigma$ is positive
+semi-definite. The parameters are $\beta$, $\sigma^2$, and $\Sigma$.
+
+A reader familiar with generalized least-squares problems might notice
+that, for a given value of $\Sigma$, the maximum likelihood estimates
+of $\beta$ and $\sigma^2$ are easy to obtain. That is indeed the case,
+but rather than directly optimize the associated likelihood and
+repeatedly invert a matrix of dimension equal to the sample size, the
+authors of \pkg{lme4} employ a series of profiling steps
+that exploit the sparsity of the problem. We retrace their solution
+here, as it has implications for what priors can be imposed without
+adding substantial computation.
+
+\subsection{Common scale}
+\label{sec:math:commonScale}
+
+Here we take a brief aside to discuss the implications of modeling the
+random effects on the same scale as the observations, that is the
+appearance of $\sigma^2$ on the second line of equation
+\ref{eq:conditionalModel}. As will soon be shown, the choice greatly
+simplifies optimization. However, for the purposes of the extending the
+model it essentially requires that priors also be placed on this
+common scale if the efficiency gains of \pkg{lme4} are to be preserved.
+
+In the absence of substantive prior knowledge, there do not seem to be
+any strong reasons to want to influence the model in ways that aren't
+modulo the residual variance. However, when such knowledge does
+exist incorporating it sometimes comes at the cost of mathematical
+convenience and profiling must be abandoned. Exceptions will be noted as they occur.
+
+\subsection{Restricted/residual maximum likelihood}
+
+As a final preliminary, we consider restricted maximum likelihood estimation, abbreviated
+REML. REML is commonly used as to unbias the estimate of the conditional
+variance. In one sense, it takes into account the cost of estimating
+the fixed effects, although for our purposes it is sufficient to know
+that it also arises from integrating out the fixed effects from the
+likelihood using a flat prior. Since this assumption is rarely made
+explicit, we refer to REML as an estimation procedure and not a
+model. Consequently, in REML estimation an objective
+function/criterion is maximized instead of a likelihood. This function
+we label `$q$', and refer to proper probability densities by
+`$p$'.
+
+\subsection{Definition of profiled likelihood}
+
+<<echo=FALSE>>=
+imgPath <- file.path(imgDir, "profileContour.pdf")
+if (!file.exists(imgPath))
+  source(file.path(sourceDir, "profileContour.R"), new.env())
+rm(imgPath)
+@ 
+\begin{figure}[t]
+  \centering \includegraphics[height=2.75in, keepaspectratio = TRUE]{profileContour}
+  \caption[Profiled likelihood illustration]{Illustration of a profiled likelihood. The left graph shows
+  the likelihood for a simple linear model mixed model with a varying intercept as a function of $\sigma$ and
+  $\sqrt\Sigma$, which we abbreviate as $\sigma_b$ ($\beta$ has already been maximized). The gray line corresponds
+  to the maximum in $\sigma$ as a function of $\sigma_b$. Following the contour along this line produces the profiled
+  likelihood of $\sigma_b$ on the right. The profiled
+  likelihood goes through the joint mode, so that maximizing it is
+  sufficient to maximize the likelihood.}
+  \label{fig:profileContour}
+\end{figure}
+
+A profiled likelihood is a function over several parameters, some of which
+have been optimized analytically. Once a maximizer for one or more
+parameters has been derived, these estimators can be plugged back into the
+likelihood and the resulting equation optimized instead.
+
+Figure \ref{fig:profileContour} demonstrates this approach for a simple
+linear mixed effects model with only a varying intercept. The likelihood is a function of the three
+parameters $\beta$, $\sigma^2$, and $\Sigma$ - all of which in this case are
+scalars. The estimator of $\beta$ that maximizes the likelihood is a
+function of the two variance parameters and has an explicit solution. Plugging
+this into the likelihood yields a first-stage profiled
+function. Similarly, the maximizer of this function with respect to
+$\sigma^2$ can be obtained as a function of just $\Sigma$. These two steps
+produce a profiled likelihood that is a function only of the variance of
+the random effects, here reducing the problem from three parameters to just one.
+
+\subsection{Profiled likelihood derivation}
+
+One of the key features of \pkg{lme4} for linear mixed models is that
+it performs profiled optimization by analytically maximizing the
+likelihood in first the fixed
+effects and subsequently the residual variance. Only the covariance of the random
+effect requires numeric techniques. In this section, we recreate
+the derivation of the profiled likelihood so that it is possible to
+demonstrate which Bayesian extensions fit in this two-step profiling scheme.
+
+We start with the joint density of the response and random
+effects. The random effects must be integrated from this equation to
+obtain the likelihood, but
+we first manipulate it so
+as to simplify subsequent optimization. To be precise, denote $N$ as the length of $y$, or the
+total number of observations. Let $Q$ be the total number of random effects
+and $P$ the number of fixed effects. Then,
+
+\begin{equation*}
+  p(y, b; \beta, \sigma^2, \Sigma) = (2\pi\sigma^2)^{-(N+Q)/2}
+  |\Sigma|^{-1/2} 
+  \exp\left\{-\frac{1}{2\sigma^2}\left[ \|y - X\beta - Zb\|^2 + b^\top
+      \Sigma^{-1} b\right]\right\}.
+\end{equation*}
+
+As we intend to integrate out $b$, we can make the change of variables
+to spherical random effects. If $\Lambda\Lambda^\top = \Sigma$ is
+a left-Cholesky factorization of $\Sigma$, then for $b = \Lambda u, u
+\sim \mathcal{N}(0, I_Q)$ we have
+
+\begin{align}
+  \label{eq:jointDensity}
+  p(y, u; \beta, \sigma^2, \Lambda) & = (2\pi\sigma^2)^{-(N+Q)/2} 
+  \exp\left\{-\frac{1}{2\sigma^2}\left[\|y - X\beta - Z\Lambda u\|^2 +
+      \|u\|^2\right]\right\}, \nonumber \\
+    & = (2\pi\sigma^2)^{-(N+Q)/2} 
+    \exp\left\{-\frac{1}{2\sigma^2}\left\|\begin{bmatrix}y \\ 0 \end{bmatrix}
+    -\begin{bmatrix}Z\Lambda & X \\ I_Q &
+      0 \end{bmatrix}\begin{bmatrix} u \\ \beta \end{bmatrix}\right\|^2\right\}.
+\end{align}
+
+At this point it is possible to identify the maximum likelihood
+estimate of $\beta$. For the moment conceptualizing
+$\beta$ as a random variable, the preceeding equation has a quadratic form in the
+exponential term for the vector $(u, \beta)$. In turn, this
+defines the two as
+jointly-normal and implies that the marginal mode for $\beta$ is the
+same as the joint mode. As we now detail, the MLE is obtained by finding the mode of
+this joint distribution in $u$ and $\beta$, ``conditioning'' on
+$\beta$, and integrating out $u \mid \beta$.
+
+Denote $\tilde{u}$ and $\tilde{\beta}$ as the modes of this joint
+distribution. They are obtained in a nuanced fashion that exploits
+sparse matrix decompositions and is reproduced for completeness in
+appendix \ref{sec:appendix:jointMode}. The decomposition that is used
+is given by the blocks of
+
+\begin{align*}
+  \begin{bmatrix} L_Z & 0 \\ L_{ZX} & L_X \end{bmatrix}
+  \begin{bmatrix} L_Z^\top & L_{ZX}^\top \\ 0 & L_X^\top \end{bmatrix}
+  & = 
+  \begin{bmatrix}\Lambda^\top Z^\top & I_Q \\ X^\top & 0 \end{bmatrix}
+  \begin{bmatrix}Z \Lambda & X \\ I_Q & 0 \end{bmatrix},  \\
+  & =  \begin{bmatrix} \Lambda^\top Z^\top Z \Lambda + I_Q & \Lambda^\top Z^\top X \\
+  X^\top Z \Lambda & X^\top X \end{bmatrix}.
+\end{align*}
+
+\noindent Specifically,
+
+\begin{align}
+  \label{eq:blockDecomp}
+  L_Z L_Z^\top & = \Lambda^\top Z^\top Z \Lambda + I_Q, \nonumber \\
+  L_{ZX} & = X^\top Z \Lambda L_Z^{-\top}, \nonumber \\
+  L_X L_X^\top & = X^\top X - L_{ZX} L_{ZX}^\top.
+\end{align}
+
+As $Z$ is sparse and $\Lambda$ is block-diagonal, $L_Z$ can be
+computed and stored efficiently. While we typically omit the
+dependence, it is important to note that these matrices depend on
+$\Lambda$. Utilizing this decomposition and the
+joint modes, we can rewrite the joint distribution by completing the square:
+
+\begin{multline*}
+  p(y, u; \beta, \sigma^2, \Lambda) = (2\pi \sigma^2)^{-(N+Q)/2}
+  \exp\left\{-\frac{1}{2\sigma^2} \left( \begin{bmatrix} u - \tilde{u} \\
+        \beta - \tilde{\beta}\end{bmatrix}^\top
+      \begin{bmatrix} L_Z & 0 \\ L_{ZX} & L_X \end{bmatrix}
+      \begin{bmatrix} L_Z^\top & L_{ZX}^\top \\ 0 & L_X^\top \end{bmatrix}
+      \begin{bmatrix} u - \tilde{u} \\ \beta - \tilde{\beta} \end{bmatrix} + \right.\right. \\
+%%
+      \left.\left.\left\|\begin{bmatrix} y \\ 0 \end{bmatrix} - \begin{bmatrix} Z
+          \Lambda & X \\ I_Q & 0 \end{bmatrix} \begin{bmatrix} \tilde{u} \\
+          \tilde{\beta}\end{bmatrix}\right\|^2\right) \right\}.
+\end{multline*}
+
+Conditioning on $\beta$ simply rotates its dependence with $u$ into
+its mean, so that writing $\mu_{u\mid\beta} = \tilde{u} -
+L_Z^{-\top}L_{ZX}^\top(\beta - \tilde{\beta})$ we have:
+
+\begin{multline*}
+  p(y, u; \beta, \sigma^2, \Lambda) = (2\pi \sigma^2)^{-(N+Q)/2}
+  \exp\left\{-\frac{1}{2\sigma^2} \left( \begin{bmatrix} u -
+        \mu_{u\mid \beta} \\
+        \beta - \tilde{\beta} \end{bmatrix}^\top
+      \begin{bmatrix} L_Z & 0 \\ 0 & L_X \end{bmatrix}
+      \begin{bmatrix} L_Z^\top & 0 \\ 0 & L_X^\top \end{bmatrix}
+      \begin{bmatrix} u - \mu_{u \mid \beta} \\ \beta - \tilde{\beta} \end{bmatrix} + \right.\right. \\
+%%
+      \left.\left.\left\|\begin{bmatrix} y \\ 0 \end{bmatrix} - \begin{bmatrix} Z
+          \Lambda & X \\ I_Q & 0 \end{bmatrix} \begin{bmatrix} \tilde{u} \\
+          \tilde{\beta}\end{bmatrix}\right\|^2\right) \right\}.
+\end{multline*}
+
+At this point, it is trivial to integrate out $u$ as it has the
+density of Gaussian random variable which we can factor in the form
+of $p(u\mid \beta)p(\beta)$. Performing this integration, we obtain the rearranged marginal likelihood
+
+\begin{multline}
+  p(y; \beta, \sigma^2, \Lambda) = (2\pi\sigma^2)^{-N/2} |L_Z|^{-1}
+  \exp\Bigg\{-\frac{1}{2\sigma^2}\Bigg[(\beta - \tilde{\beta})^\top
+  L_XL_X^\top (\beta - \tilde{\beta}) + \\ 
+  \left.\left.\left\| \begin{bmatrix} y \\
+          0 \end{bmatrix} - \begin{bmatrix} Z \Lambda & X \\ I_Q & 0 \end{bmatrix}
+        \begin{bmatrix} \tilde{u} \\ \tilde{\beta} \end{bmatrix} \right\|^2\right]\right\}.
+\label{eq:likelihood}
+\end{multline}
+
+Having the likelihood in this form makes the profiling steps straightforward. The maximum
+likelihood estimator of $\beta$ is $\hat\beta = \tilde{\beta}$, which
+is also the joint mode. Plugging this back in gives us the first stage
+profiled equation
+
+\begin{equation*}
+  p(y; \hat\beta, \sigma^2, \Lambda) = (2\pi\sigma^2)^{-N/2}|L_Z|^{-1} 
+  \exp\left\{-\frac{1}{2\sigma^2} \left\| \begin{bmatrix} y \\
+        0 \end{bmatrix} - \begin{bmatrix} Z \Lambda & X \\ I_Q & 0 \end{bmatrix}
+      \begin{bmatrix} \tilde{u} \\ \tilde{\beta} \end{bmatrix} \right\|^2\right\}.
+\end{equation*}
+  
+From this, maximizing in $\sigma^2$ yields the MLE $\hat{\sigma}^2 = \frac{1}{N}\left[ \|y - X\hat{\beta}
+  - Z\Lambda \tilde{u} \|^2 + \|\tilde{u}\|^2\right]$. Utilizing this in turn produces the fully profiled likelihood:
+
+\begin{equation}
+  p(y;\hat{\beta}, \hat{\sigma}^2, \Lambda) = \left(2\pi
+  \hat{\sigma}^2(\Lambda)\right)^{-N/2} |L_Z(\Lambda)|^{-1}e^{-N/2}.
+\label{eq:profiledLikelihood}
+\end{equation}
+
+REML estimation proceeds by integrating $\beta$ from the likelihood as a Gaussian
+random variable rather than by maximization. The REML objective function is
+
+\begin{equation}
+  q(y; \sigma^2, \Lambda) = (2\pi\sigma^2)^{-(N-P)/2}
+  |L_Z|^{-1}|L_X|^{-1} \exp\left\{-\frac{1}{2\sigma^2}
+    \left\|\begin{bmatrix} y \\ 0 \end{bmatrix} - \begin{bmatrix}
+        Z\Lambda & X \\ I_Q & 0 \end{bmatrix} \begin{bmatrix} \tilde{u} \\ 
+        \tilde{\beta} \end{bmatrix} \right\|^2\right\}.
+\end{equation}
+
+\noindent The REML estimate of $\sigma^2$ is $\hat\sigma^2_{\mathrm{RE}} = \frac{1}{N-P}\left[ \|y
+  - X \tilde{\beta} - Z \Lambda \tilde{u} \|^2 +
+  \|\tilde{u}\|^2\right]$, while the profiled REML objective function is
+
+\begin{equation}
+  q(y; \hat{\sigma}^2, \Lambda) = \left(2\pi
+    \hat{\sigma}^2_{\rm RE}(\Lambda)\right)^{-(N-P)/2}|L_Z(\Lambda)|^{-1}|L_X(\Lambda)|^{-1}e^{-(N-P)/2}.
+\label{eq:remlObjective}
+\end{equation}
+
+\section{Profiled posteriors for linear mixed models}
+
+In this section we describe Bayesian extensions to linear mixed models
+which can be profiled in fashion similar to the two-step approached
+used for the likelihood. Arbitrary
+priors can be applied and the posterior mode found instead, but doing
+so may dramatically increase the
+number of parameters that require numeric optimization.
+
+\subsection{Preliminaries}
+\label{sec:bmath:prelim}
+
+As priors are successively applied to model components it becomes
+important to clearly define the quantity that is being estimated. For example, when placing
+a prior over the fixed effects ($\beta$) but not the other parameters, the
+traditional Bayesian estimand is the posterior distribution $p(u, \beta | y; \sigma^2, \Sigma)$
+while the variance components ($\sigma^2$ and $\Sigma$) are hyperparameters of this
+distribution. Point estimation in this setting
+corresponds to estimating the posterior means of $u$ and $\beta$, that is
+$\E\left[ (u, \beta) \mid y; \hat{\sigma}^2, \hat\Sigma\right]$.
+
+Conversely, the ``likelihood'' can be redefined. Once $\beta$ has
+been modeled, classically it should be integrated out from
+the joint distribution to yield the marginal distribution, $p(y; \sigma^2,
+\Sigma)$. In a sense, the fixed effects become random effects with a
+known distribution. For the fixed effects there is some tradition in
+favor of taking this integral - as mentioned the REML
+estimates can be derived by applying and averaging $\beta$ over a flat
+prior. However, little similar precedent exists for the covariance of
+the random effects, so while it may be ideologically pure to do so, it
+also may confound expectations.
+
+To be consistent, we instead adopt the perspective of the penalized
+likelihood, or regularization. For example, putting a prior on $\beta$
+is equivalent to maximizing the posterior density
+$p(\beta \mid y; \sigma^2, \Sigma)$ to find $p(\hat{\beta} \mid y;
+\hat{\sigma}^2, \hat{\Sigma})$. While this hybrid quantity may be unusual to the
+Bayesian, it represents a stop-gap on the way to a full posterior mode
+obtained by placing priors over all model components. Because
+\pkg{lme4} offers REML estimation, when it makes sense to do so we
+investigate that integral as well.
+
+A related issue concerning parameterization arises when
+moving from prior to posterior. Continuing in the perspective of the
+penalized likelihood, we assume that if a prior is specified on, say, the inverse of the residual variance,
+the posterior mode of the inverse of the residual variance is desired. In
+other words, a prior once specified is applied directly as a penalty
+function, and the Jacobian that results from a change of
+variables to a canonical form is simply ignored. This can
+produce some confusion because a parameter may be alternatively
+reported as a variance and a standard deviation while the posterior
+mode that is calculated may be of neither. Nevertheless, we find this
+preferable to finding the posterior modes under implicit transformations and having the awkwardness
+of a variance not being the square of its associated standard deviation.
+
+\subsection{Fixed effect priors}
+\label{sec:bmath:fixefPrior}
+
+Gaussian priors on the fixed effects require little effort to include
+as they can be treated as pseudo data. The program for optimization follows
+almost identical steps as that for the first stage of the
+likelihood. If we assume that $\beta \mid \sigma^2 \sim
+\mathcal{N}(0, \sigma^2\Sigma_\beta)$ with $\Sigma_\beta$ known,
+positive definite, and
+having the decomposition $\Sigma_\beta = L_\beta L_\beta^\top$, then
+the joint density from equation \ref{eq:jointDensity} becomes
+
+\begin{align*}
+  p(y, u, \beta; \sigma^2, \Sigma) & = (2\pi\sigma^2)^{-(N+Q+{\color{blue}P})/2}
+  |\Sigma_\beta|^{-1/2} \exp\left\{-\frac{1}{2\sigma^2}\left[\|y - X\beta - Z \Lambda u
+      \|^2 + \|u\|^2 + {\color{blue}\beta^\top\Sigma_\beta^{-1}\beta}\right]\right\}, \\
+  & = (2\pi\sigma^2)^{-(N+Q+ {\color{blue}P})/2}|\Sigma_\beta|^{-1/2} \exp\left\{-\frac{1}{2\sigma^2}
+    \left\|\begin{bmatrix}y \\ 0 \\ 0\end{bmatrix} -
+      \begin{bmatrix} Z \Lambda & X \\ {\color{blue} 0} & {\color{blue}L_\beta^{-1}} \\ I_Q & 0 \end{bmatrix}
+      \begin{bmatrix} u \\ \beta \end{bmatrix}\right\|^2\right\}.
+\end{align*}
+
+Note the occurrence of $\sigma^2$ when modeling $\beta$. In this
+case, use of the common scale factor allows us to proceed almost
+exactly as before:
+$L_XL_X^\top$ changes from $X^\top X - L_{ZX}L_{ZX}$ to $X^\top X + \Sigma_\beta^{-1} -
+L_{ZX}L_{ZX}^\top$ and 
+the degrees of freedom for $\sigma^2$ increase from $N$ to $N +
+P$. Once $L_X$ has been redefined, the modes of this function,
+$\tilde{u}$ and $\tilde{\beta}$, are calculated with no other
+changes. The marginal posterior used as an objective function for optimization
+is given by
+
+\begin{multline*}
+  p(\beta \mid y; \sigma^2, \Lambda) \propto
+  (\sigma^2)^{-(N+P)/2}|L_Z|^{-1} \times \\
+  \exp\left\{-\frac{1}{2\sigma^2} \left[ (\beta - \tilde\beta)^\top
+      L_XL_X^\top (\beta - \tilde\beta) + \left\|\begin{bmatrix}y \\ 0 \\ 0\end{bmatrix} -
+      \begin{bmatrix} Z \Lambda & X \\ 0 & L_\beta^{-1} \\ I_Q & 0 \end{bmatrix}
+      \begin{bmatrix} \tilde{u} \\ \tilde\beta \end{bmatrix}\right\|^2\right] \right\}.
+\end{multline*}
+
+\noindent The maximum a posteriori estimate of $\beta$ is
+$\tilde\beta$, and the posterior at its mode has maximal values for
+the hyperparameter value $\hat{\sigma}^2 =
+\frac{1}{N+P}\left[\|y - X\hat{\beta} - Z\Lambda\tilde{u}\|^2 +
+  \|\tilde{u}\|^2 + \|\tilde L_{\beta}^{-1}
+  \tilde\beta\|^2\right]$. The profiled posterior at its mode is:
+
+\begin{equation*}
+  p(\hat{\beta} \mid y; \hat{\sigma}^2, \Lambda) \propto
+  (\hat{\sigma}^2(\Lambda))^{-(N+P)/2} |L_Z(\Lambda)|^{-1}.
+\end{equation*}
+
+Now correctly denoted a likelihood, the REML procedure of integrating
+out $\beta$ yields the function:
+
+\begin{equation*}
+  p(y;\sigma^2, \Lambda) = (2\pi\sigma^2)^{-N/2}|\Sigma_\beta|^{-1/2}
+  |L_Z|^{-1} |L_X|^{-1}   \exp\left\{-\frac{1}{2\sigma^2} \left\|\begin{bmatrix}y \\ 0 \\ 0\end{bmatrix} -
+      \begin{bmatrix} Z \Lambda & X \\ 0 & L_\beta^{-1} \\ I_Q & 0 \end{bmatrix}
+      \begin{bmatrix} \tilde{u} \\ \tilde\beta \end{bmatrix}\right\|^2\right\}.
+\end{equation*}
+
+The estimator $\hat{\sigma}^2_{\rm RE}$ is the same as the previous case, except for being scaled by
+$N$ instead of $N+P$. The profiled likelihood/REML objective function is:
+
+\begin{equation*}
+  p(y; \hat{\sigma}^2, \Lambda) =
+  (2\pi\hat{\sigma}^2_{\rm RE}(\Lambda))^{-N/2}|\Sigma_\beta|^{-1/2} |L_Z(\Lambda)|^{-1}|L_X(\Lambda)|^{-1}
+  e^{-N/2}.
+\end{equation*}
+
+Had we instead chosen to incorporate substantive prior knowledge,
+i.e. assumed $\beta \sim \mathcal{N}(0, \Sigma_\beta)$ without utilizing
+the common scale, the least-squares problem is solvable but then
+depends on the value of $\sigma^2$. In turn, this needs to be added to
+the set of parameters optimized numerically. Specifically, the joint
+density (equation \ref{eq:jointDensity}) becomes:
+
+\begin{equation*}
+  p(y, u, \beta; \sigma^2, \Sigma) = (2\pi\sigma^2)^{-(N+Q+P)/2}
+  |\Sigma_\beta|^{-1/2}
+  \exp\left\{-\frac{1}{2\sigma^2}\left\|
+      \begin{bmatrix} y \\ 0 \\ 0 \end{bmatrix} - 
+      \begin{bmatrix} Z\Lambda & X \\ 0 & {\color{blue}\sigma}L_\beta^{-1} \\
+        I_Q & 0 \end{bmatrix}
+      \begin{bmatrix} u \\ \beta \end{bmatrix}
+    \right\|^2\right\}.
+\end{equation*}
+
+$L_XL_X^\top$ would then be computed as factors of $X^\top X + {\color{blue}
+  \sigma^2}\Sigma_\beta^{-1} - L_{ZX}L_{ZX}^\top$ so that the joint
+modes $\tilde{u}(\sigma^2, \Lambda)$ and $\tilde{\beta}(\sigma^2, \Lambda)$ are properly
+written as depending on the common scale as well as the covariance of
+the random effects.
+
+More complicated priors, such as $t$ distributions, require adding
+$\beta$ to the set of parameters for numeric optimization.
+
+\subsection{Common scale priors}
+\label{sec:bmath:residPrior}
+
+\begin{table}
+  \begin{center}
+  \begin{tabular}{lcccc}
+    case & function & norm const & $\nu$ & $S^2$ \\ \hline
+    $\beta$ unmodeled, ML & $p(y; \hat\beta, \sigma^2, \Lambda)$ &
+    $(2\pi)^{-\nu/2}$ & $N$ & $\text{PRSS}$ \\
+    $\beta$ unmodeled, REML & $q(y; \sigma^2, \Lambda)$ &
+    $(2\pi)^{-\nu/2}|L_X|^{-1}$ & $N-P$ & $\text{PRSS}$ \\
+    $\beta \sim \mathcal{N}(0, \sigma^2\Sigma_\beta)$, MAP & $p(\hat\beta \mid y; \sigma^2,
+    \Lambda)$ & NA & $N+P$ &  $\text{PRSS} + \|L_\beta^{-1}\beta\|^2$ \\
+    $\beta \sim \mathcal{N}(0, \sigma^2\Sigma_\beta)$, ML & $p(y;
+    \sigma^2, \Lambda)$ & $(2\pi)^{-\nu/2}|L_X|^{-1}|\Sigma_\beta|^{-1/2}$ & $N$
+    & $\text{PRSS} + \|L_\beta^{-1}\beta\|^2$
+  \end{tabular}
+  \end{center}
+  \caption{The variable components of equation
+    \ref{eq:commonScaleObjective} broken down by the choice of model
+    for the fixed effects. `$\text{PRSS}$' stands for the base-model penalized residual
+    sum of squares, $\|y - X\hat{\beta} -
+    Z\Lambda\tilde{u}\|^2 + \|\tilde{u}\|^2$. The first and third rows
+    correspond to straight maximization, while the second and fourth
+    arise from the REML procedure of integrating out $\beta$.}
+  \label{tab:commonScalePriorSpecifics}
+\end{table}
+
+Under the assumption that the fixed effects can be successfully profiled out
+without depending on the common scale, we have a first-stage profiled
+equation of the form
+
+\begin{equation}
+  f(y; \sigma^2, \Lambda) \propto (\sigma^2)^{-\nu/2}|L_Z|^{-1}
+  \exp\left\{-\frac{1}{2\sigma^2}S^2\right\}.
+\label{eq:commonScaleObjective}
+\end{equation}
+
+\noindent Table \ref {tab:commonScalePriorSpecifics} enumerates the
+possible instantiations of this equation for the cases we have
+considered. Taking a logarithm, derivative with respect to
+$\sigma^2$, and rescaling yields a linear equation with a maximizer in
+$\hat{\sigma}^2$ that is $\frac{1}{\nu}S^2$.
+
+Unlike the case for the fixed effects, application of an independent
+prior to $\sigma^2$ can proceed directly from this equation without
+reiterating its derivation. A conjugate prior, that is an inverse
+gamma on the scale of $\sigma^2$, will again yield a linear optimization
+problem. Specifically, if we use a shape parameter of $a$ and a scale
+of $b$, then $\hat\sigma^2 = \frac{1}{\nu/2 + a + 1}(S^2/2 + b)$.
+
+More complicated results follow from other variants of the gamma
+family. If we apply a gamma distribution to $\sigma^2$, not its
+inverse, and again with shape $a$ and scale $b$, we transform the base
+function objective function into the form
+
+\begin{equation*}
+  g(y; \sigma^2, \Lambda) \propto(\sigma^2)^{-\nu/2 + a -
+    1}|L_Z|^{-1}\exp\left\{-\frac{1}{2\sigma^2}S^2 - \frac{\sigma^2}{b}\right\}.
+\end{equation*}
+
+A logarithm and a derivative with respect to $\sigma^2$ produces a
+quadratic problem. Taking the non-negative square root yields
+
+\begin{equation*}
+  \hat{\sigma}^2 = \frac{b}{2}\left[ \sqrt{(\nu/2 - a + 1)^2 + 2 S^2 /
+      b} - (\nu / 2 - a + 1)\right].
+\end{equation*}
+
+It is also possible to apply an inverse gamma to $\sigma$ as
+a standard deviation and obtain a quadratic problem. The objective
+function and its mode under a gamma prior with shape $a$ and scale $b$
+are given by:
+
+\begin{align*}
+  g(y, \sigma^2, \Lambda) & = (\sigma^2)^{-(\nu + a + 1)/2}
+  \exp\left\{-\frac{1}{2\sigma^2}S^2 - \frac{b}{\sigma}\right\}, \\
+  \hat\sigma & = \frac{b + \sqrt{b^2 + 4(\nu + a + 1)S^2}}{2(\nu + a + 1)}.
+\end{align*}
+
+Finally, we also note that it is possible, and often desirable, to use
+a point-mass prior for the residual variance. For example, this arises in
+meta-analyses which can be written as weighted linear mixed models
+having a residual variance of 1. While maintaining the same general
+profiling procedure, little effort is
+required to simply plug-in a specific value for $\sigma^2$ instead of
+estimating it.
+
+In summary, for the priors on $\beta$ that have maximizers independent
+of $\sigma^2$, the application an a) inverse-gamma prior on
+$\sigma^2$, b) gamma on $\sigma^2$, or c) inverse-gamma on $\sigma$
+yield linear, quadratic, or quadratic optimization problems
+respectively. Point priors require no optimization at all. When these conditions are satisfied
+we proceed as before, first solving for the maximum in $(u, \beta)$ as before, then using these
+to find the maximum in $\sigma^2$ if necessary, and finally by plugging these values into a
+likelihood/objective function such as equation \ref{eq:likelihood}. The maximizer in $\sigma^2$ may no longer
+be proportional to the exponential term so that the resulting equation may have a more
+complex form than, say the profiled likelihood (equation \ref{eq:profiledLikelihood}),
+however this does not come with increased computational complexity.
+
+Finally we note that it is also possible to apply more complicated priors and maintain the
+profiling scheme so long as a unique mode for $\sigma^2$ exists. An
+inner-loop single parameter optimization or, equivalently, a root
+finding algorithm can serve the role of explicit derivations without
+greatly increasing running time. The final case considered in section
+\ref{sec:bmath:fixefPrior}, with a prior for the fixed effects having
+a covariance specified on an absolute scale, can also be computed using single
+parameter optimization at this step. However, doing so requires that the least-squares
+problem be solved for every change in value of $\sigma^2$.
+
+\subsection{Random effect covariance priors}
+\label{sec:bmath:covPriors}
+
+The first concern that arises when placing a prior over the covariance
+of the random effects is the structure of that matrix. While we have
+consistently written simply `$\Sigma$' as if it were a monolithic
+construct, in reality this matrix consists of block repetitions of
+individual submatrices along its diagonal. If there are $K$ grouping
+factors with $q_k$ varying coefficients and $J_k$ different groups at
+level $k$, then we have $\Sigma_1, \ldots, \Sigma_k$ distinct covariance
+matrices and $\Sigma = \mathrm{diag}_{k=1}^K \left( I_{J_k}\otimes
+  \Sigma_k \right)$. In words, $\Sigma$ consists of $\Sigma_1$
+repeated $J_1$ times along the diagonal, then $\Sigma_2$ repeated
+$J_2$ times, and so forth. A prior over $\Sigma$ is in reality a prior
+over $\Sigma_1, \ldots, \Sigma_k$, or equivalently a
+reparameterization of these matrices. We denote the free parameters of
+these matrices as $\theta$. For simplicity, we only consider covariance
+priors that factor independently across these submatrices, although
+joint priors remain an avenue for future work.
+
+An examination of the profiled likelihood (equation
+\ref{eq:profiledLikelihood}) or REML objective function (equation
+\ref{eq:remlObjective}) demonstrates that priors on $\Sigma$
+independent of the other parameters can be applied
+directly to the covariance of the random effects - divided by the
+residual variance - by simply adding a penalty term. For example, in the profiled posterior
+
+\begin{align*}
+  p(\Sigma(\theta) \mid y; \hat\beta, \hat\sigma^2) & \propto 
+  p(y; \hat\beta, \hat\sigma^2, \Sigma(\theta)) {\color{blue} p(\Sigma(\theta))},  \\
+  & \propto 
+  \left\{\hat{\sigma}^2(\theta)^{-N/2}|L_Z(\theta)|^{-1} \right\}p(\Sigma(\theta)),
+\end{align*}
+
+\noindent the first term on the right-hand side, the profiled
+likelihood, is calculated exactly as before.
+
+The situation is more complicated when the prior is
+to be applied in an absolute sense, that is not scaled by the
+residual variance. In particular, this situation arises when substantive prior
+information exists. As will be shown, imposing a prior of
+this sort that is independent of the other parameters is actually equivalent to placing a joint prior on
+$\sigma^2$ and $\Sigma$. If profiling is to be preserved, 
+covariance priors not on the common scale are restricted to cases similar
+to those outlined for the residual variance. It is important to
+reiterate that the discussion that follows is entirely limited to this
+case, and that scale-free optimization is trivial in comparison.
+
+As an example of the problems involved, consider a set of data with a single grouping
+factor. For notational simplicity, we will drop the $k=1$ subscript
+when possible so that $q=q_1$ is the number of varying coefficients at
+this level and $\tilde\Sigma= \sigma^2 \Sigma_1$ is the associated
+absolute-scale covariance matrix. Suppose that it is desired to place an inverse Wishart prior on
+$\tilde\Sigma$ with $\mu$ degrees of freedom and scale matrix
+$\Psi$. Applying this to the likelihood (equation \ref{eq:likelihood})
+produces the posterior density
+
+\begin{multline*}
+  p(\tilde\Sigma \mid y; \beta, \sigma^2) \propto
+  (\sigma^2)^{-N/2}|L_Z|^{-1} {\color{blue}|\tilde\Sigma|^{-(\mu + q + 1)/2}}
+  \exp\left\{-\frac{1}{2{\color{blue}\cdot 1}} \mathrm{tr}\left(\Phi{\color{blue}\tilde\Sigma^{-1}}\right)\right\}\times \\
+  \exp\left\{-\frac{1}{2\sigma^2} \left[(\beta - \tilde\beta)^\top
+      L_XL_X^\top (\beta - \tilde\beta) + \left\|\begin{bmatrix} y \\
+          0 \end{bmatrix} -
+        \begin{bmatrix} Z\Lambda & X \\ I_Q & 0 \end{bmatrix}
+        \begin{bmatrix} u \\ \beta \end{bmatrix}\right\|^2\right]\right\}.
+\end{multline*}
+
+However, this equation is to be optimized point-wise. For the values
+of $\hat\beta$, $\hat\sigma^2$, and $\widehat{\tilde\Sigma}$ that
+maximize it, $\hat\beta$, $\hat\sigma^2$, and $\hat\Sigma_1 =
+\widehat{\tilde\Sigma} / \hat\sigma^2$ achieve
+the same value. That is, the right-hand side is the same if we instead
+work with the equation:
+
+\begin{multline*}
+  p(\tilde\Sigma \mid y; \beta, \sigma^2) \propto 
+  (\sigma^2)^{-(N+{\color{blue}\mu+q+1})/2}
+  |L_Z|^{-1}{\color{blue}|\Sigma_1|^{-(\mu + q + 1)/2}} \times \\
+  \exp\left\{-\frac{1}{2\sigma^2}\left[(\beta - \tilde\beta)^\top
+      L_XL_X^\top (\beta - \tilde\beta) + \left\|\begin{bmatrix} y \\
+          0 \end{bmatrix} -
+        \begin{bmatrix} Z\Lambda & X \\ I_Q & 0 \end{bmatrix}
+        \begin{bmatrix} u \\ \beta \end{bmatrix}\right\|^2 +
+      \mathrm{tr} \left(\Phi{\color{blue}\Sigma_1^{-1}}\right)\right]\right\}.
+\end{multline*}
+
+Consequently, we have that an inverse Wishart prior on the unscaled
+matrix $\tilde\Sigma$ with degrees of freedom $\mu$ and scale $\Psi$
+is equivalent to the joint prior
+
+\begin{align*}
+  \sigma^2 \mid \Sigma_1 & \sim \mathrm{Inv-Gamma}
+  \left(\mathrm{shape} = (\mu + q - 1) / 2, \text{ scale} =
+    \mathrm{tr}\left(\Psi\Sigma_1^{-1}\right) / 2\right), \\
+  \Sigma_1 & \sim \mathrm{Inv-Wishart}(\mu, \Psi). \\
+\end{align*}
+
+Doing similar calculations for the cases of a Wishart prior on $\tilde\Sigma$ and an
+inverse Wishart on the unique positive definite square root of $\tilde\Sigma$
+yield analogous schemes to the optimization of $\sigma^2$ in
+section \ref{sec:bmath:residPrior}, with an induced gamma distribution on
+$\sigma^2$ and inverse gamma distribution on $\sigma$
+respectively. 
+
+Taking into consideration these induced priors and the added complexity
+of $\Sigma$ being comprised of multiple covariance sub-matrices,
+straightforward profiling of $\sigma^2$ is constrained to the cases where the
+totality of all induced priors yield a quadratic or linear optimization
+problem. Specifically, inverse Wishart distributions applied to the
+unscaled covariance matrices can be added in any quantity
+desired, as the net effect is to add terms to the penalized residual
+sum of squares. For any remaining grouping factors for which an
+absolute-scaled prior is desired, either Wishart distributions on covariance
+matrixes or inverse Wishart distributions on covariance square roots
+must be chosen and applied consistently. To profile $\sigma^2$, the
+various coefficients of the exponential terms are collected for each
+optimization iteration by cycling through the grouping factors, and
+the resulting linear or quadratic problem solved.
+
+Finally, we briefly discuss improper Wishart-family priors. The principle
+complication in modeling unscaled random effect covariances is in
+the exponential term involving $\sigma^2$ introduced into the
+likelihood. The polynomial term simply increases or decreases the
+degrees of freedom. Thus, improper distributions that
+eliminate the exponential term are trivial to include. These are the
+limits of gamma/Wishart distributions as the scale tends to infinity
+or the limits of the inverse as the scale tends to 0. Further allowing
+improper degrees of freedom as well shows that the choice of prior
+parameterization is irrelevant, that is Wishart priors on covariances, square
+roots, or their inverses all yield penalties terms that are powers of
+the determinant.
+
+\subsection{Summary}
+
+\begin{table}
+  \begin{center}
+  \begin{tabular}{ccc}
+    Fixed Effects & Residual Variance & Random Effect Covariance \\
+    $\beta$ & $\sigma^2$ & $\Sigma_k$ \\ \hline
+    $\beta \mid \sigma^2 \sim \mathcal{N}(0, \sigma^2\Sigma_\beta)$ & 
+    $\sigma^2 \sim \mathrm{Inv-Gamma}$ & $p(\Sigma_k)$ arbitrary \\
+    & $\sigma^2 \sim \mathrm{Gamma}$ \\
+    & $\sigma \sim \mathrm{Inv-Gamma}$ & $\tilde\Sigma_k =
+    \sigma^2\Sigma_k$, \\
+    & $\sigma^2 = \sigma^2_0 \text{ w.p.} 1$ & $\tilde\Sigma_k \overset{\rm ind}{\sim} {\rm Wish/Inv-Wish}$ \\
+    & & $\tilde\Sigma_k^{1/2} \overset{\rm ind}{\sim} {\rm Inv-Wish}$
+  \end{tabular}
+\end{center}
+  \caption{Priors for linear mixed models that can be fit into the
+    two-stage profiling scheme of \pkg{lme4}.}
+  \label{tab:easyPriors}
+\end{table}
+
+Table \ref{tab:easyPriors} lists the priors that in our discussion we have shown can be
+fully profiled down to functions that are just the covariance of the
+random effects. Provided that caution is exercised so
+that the optimization of the residual variance is straightforward, an option can be selected
+from each column. In all cases, the algorithm to calculate the
+profiled objective function is given by:
+
+\begin{enumerate}
+\item Determine the maximizer of the joint density of the
+  observations and the spherical random effects in $(u, \beta)$. In
+  doing so, the integral of the joint density with respect to the
+  random effects is effectively computed as well.
+\item Plug in the joint mode of $\beta$ to the likelihood, as it is also the maximum
+  likelihood/maximum a posteriori estimate.
+\item Calculate the mode of $\sigma^2$ as the solution to a linear or
+  quadratic problem, depending on the choice of priors. Point priors
+  involve no optimization, and more complicated cases may require root-finding.
+\item Plug in the estimate of $\sigma^2$ and numerically optimize the
+  resulting function.
+\end{enumerate}
+
+\section{Generalized linear mixed model specification}
+\label{sec:glmms}
+
+As there are no obvious ways by which a generalized linear mixed model
+can be profiled, \pkg{lme4} performs optimization for these models
+numerically across the entire set of parameters. In order to apply priors on
+these models as well, we write out their
+specification. Generalized linear models principally differ from their
+regular counterparts through the use of a link function, here denoted
+`$g$', that maps linear combinations of coefficients to the expected
+value of the response. In addition, the response given the random
+effects is no longer assumed
+Gaussian but instead merely a member of the the exponential family of
+distributions. While omitting the specifics of this conditional distribution,
+generalized linear mixed models can be written as
+
+\begin{align*}
+  \E[y \mid b; \beta, \Sigma] & = g^{-1}(X\beta + Zb), \\
+  b & \sim \mathcal{N}(0, \Sigma),
+\end{align*}
+
+\noindent where $g^{-1}$ is the inverse of the link function and it is
+to be understood as applied component-wise to the vector of linear predictors.
+
+Given this specification, the parameters of the model are the
+fixed effects, $\beta$, and the covariance of the random effects,
+$\Sigma$. Like linear mixed models, $\Sigma$ is highly structured and
+comprised of sub-matrices. Unlike linear mixed models, there is no scale
+parameter/residual variance. The family associated with the response
+may have additional parameters, but as of this writing the ``quasi''
+options that include overdispersion are not supported by \pkg{lme4}.
+
+\pkg{lme4} performs optimization for generalized linear mixed models
+by assuming values for $\beta$ and $\Sigma$, approximating the
+integral over the random effects, and returning a value for the
+likelihood to a numeric optimizer. To apply a prior to either parameter,
+it is sufficient to include a penalty term at this last step.
+
+\section[blme overview]{\pkg{blme} overview}
+
+We have written the software package \pkg{blme} for the \proglang{R}
+statistical programming language that performs profiled posterior
+maximization in linear and generalized linear mixed models. \pkg{blme}
+is based on \pkg{lme4} and uses as much machinery of that package
+possible. In particular, the efficient \proglang{C++} code and matrix
+decompositions that underly an \pkg{lme4} model fit are also used by \pkg{blme}.
+
+\subsection[Calling blme functions]{Calling \pkg{blme} functions}
+
+\pkg{blme} was designed to be familiar to users of \pkg{lme4}. A
+\code{bmerMod} S4 object extends the \code{merMod} class, and
+consequently inherits all of the same functionality. In \pkg{lme4}, linear mixed
+models are fit using the \code{lmer} function, while generalized
+models use \code{glmer}. Fitting a model in \pkg{blme} is achived by
+instead calling \code{blmer} or \code{bglmer}, 
+modified versions of the original functions with new arguments.
+
+The prototypes for \code{blmer} and \code{bglmer} are:
+
+\begin{CodeChunk}
+  \begin{Code}
+blmer(formula, data, REML = TRUE, control = lmerControl(), start = NULL,
+      verbose = 0L, subset, weights, na.action, offset, contrasts = NULL,
+      devFunOnly = FALSE, 
+      cov.prior = wishart, fixef.prior = NULL, resid.prior = NULL, ...)
+  \end{Code}
+  \begin{Code}
+bglmer(formula, data, family = gaussian, control = glmerControl(),
+       start = NULL,  verbose = 0L, nAGQ = 1L, subset, weights, na.action, 
+       offset, contrasts = NULL, mustart, etastart, devFunOnly = FALSE, 
+       cov.prior = wishart, fixef.prior = NULL, ...)
+  \end{Code}
+\end{CodeChunk}
+
+\noindent For both, all but the last line are identical to their
+\pkg{lme4} equivalent. The new arguments are
+\code{cov.prior}, \code{fixef.prior}, and \code{resid.prior}. All
+three apply to linear mixed models, while only the first two apply to
+generalized ones, for the reasons discussed in section \ref{sec:glmms}.
+
+The format for each new argument is analogous to that of a delayed
+function call that is evaluated in a special environment. This is done so 
+that priors can refer to particulars of the model without having these
+explicitly defined at the calling level, for example allowing a default prior for random effect covariance
+matrices that scales with the dimensions of the grouping
+factors. Variables available at prior specification are:
+
+\begin{enumerate}
+\item \code{q.k} or \code{level.dim} - dimension of $\Sigma_k$, or how many
+  coefficients vary at the $k$th level; covariance priors only
+  \item \code{j.k} or \code{n.grps} - number of groups at the
+  $k$th level; covariance priors only
+\item \code{n} or \code{n.obs} - number of observations
+\item \code{p} or \code{n.fixef} - number of fixed effects
+\end{enumerate}
+
+Exceptions to the function-call syntax are that 0-argument function invocations
+can be expressed without the empty \code{()} parentheses, character
+strings can be passed instead to aid in reuse, and for
+multiple grouping factors \proglang{R} formula notation is abused to
+specify different priors for different levels. In the case of multiple
+priors for a single argument, the input should be a list. Examples and
+descriptions follow in the relevant sections below.
+
+Finally, note that the default random effect covariance prior is set
+to \code{wishart} for both functions. This provides a
+weakly-informative prior that mitigates the downward bias of
+covariance estimates and guarantees that the result will be strictly
+positive definite \TODO{REF}. For the sake of exposition, in the fixed effect and
+conditional prior examples discussed below the covariance prior will be explicitly
+disabled so that model being discussed differs from the \pkg{lme4}
+version by only the prior under consideration.
+
+\subsection{Fixed effect priors}
+\label{sec:blme:fixefPriors}
+
+Currently supported fixed effect priors are flat/\code{NULL}, multivariate
+normal, and multivariate Student's $t$ distributions. Flat and normal
+priors can be profiled without adding the fixed effects to the numeric
+optimization parameter set. $t$ distributions require additional computation, 
+and thus can be considerably slower to fit. In addition, $t$ priors
+cannot be used when the \code{REML} is true. See
+section \ref{sec:bmath:fixefPrior} for details.
+
+To specify a fixed effect prior, pass to \code{blmer} or \code{bglmer}
+a value for the \code{fixef.prior} argument of the format:
+
+\begin{Code}
+  distribution.name(options.list)
+\end{Code}
+
+\noindent where \code{distribution.name} can be \code{normal} or
+\code{t}. An argument of \code{NULL}/\code{flat} is equivalent to a
+flat prior or no
+penalty term. Options and defaults are:
+
+\begin{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('normal', blme:::lmmDistributions$normal)
+@
+  \begin{enumerate}
+  \item \code{sd} - a vector of standard deviations. If length 1,
+    the value is reused for all components. If length 2, the first
+    item applies to the first fixed effect (typically the intercept
+    term), while the second is reused. Otherwise must be of length
+    equal to the number of fixed effects.
+  \item \code{cov} - either a vector of variances of length equal to
+    the number of fixed effects or a positive definite matrix of
+    appropriate size. Only one of \code{sd} or \code{cov} should be
+    specified.
+  \item \code{common.scale} - a logical that when true implies that prior
+    is of the form $\beta\mid \sigma^2 \sim \mathcal{N}(0,
+    \sigma^2\Sigma_\beta)$. When false, $\beta \sim \mathcal{N}(0,
+    \Sigma_\beta)$. Only applies to linear mixed models.
+  \end{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('t', blme:::lmmDistributions$t)
+@
+  \begin{enumerate}
+  \item \code{df} - a positive scalar signifying the degrees of freedom.
+  \item \code{scale} - determines the scale matrix. If is a scalar,
+    the scale is that value times the identity matrix. For a length of
+    2 the second value is placed along the diagonal for all intercepts while the
+    off-diagonals are set to 0. For a length equal to the number of fixed effects,
+    the values are placed directly on the diagonal. Otherwise, a
+    positive definite matrix of the appropriate size can be given.
+  \item \code{common.scale} a logical that when true implies that prior
+    is of the form $\beta\mid \sigma^2 \sim t_\nu(0,
+    \sigma^2\Sigma_\beta)$. When false, $\beta \sim t_\nu(0,
+    \Sigma_\beta)$. Only applies to linear mixed models.
+  \end{enumerate}
+  The $t$ prior used has the density
+  \begin{equation*}
+    \beta \sim t_\nu(0, \Sigma_\beta) \Rightarrow p(\beta) =
+    \dfrac{\Gamma\left((\nu + P)/2\right)}
+    {\Gamma(\nu/2) (\nu\pi)^{P/2}|\Sigma_\beta|^{1/2} \left[
+        1 + \frac{1}{\nu}\beta^\top
+        \Sigma_\beta^{-1}\beta\right]^{(\nu + P)/2}},
+  \end{equation*}
+  \noindent where $P$ is the number of fixed effects. \TODO{reference}.
+\end{enumerate}
+
+\subsection{Fixed effect examples}
+
+For the purposes of illustration, suppose that we have defined in the
+global environment a response variable \code{y}, a predictor
+\code{x}, and a grouping factor \code{g}.
+
+\subsubsection*{Default normal prior}
+
+The following applies a normal prior using the default
+hyperparameters, while disabling the default random effect covariance prior.
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 + x | g), cov.prior = NULL,
+      fixef.prior = normal)
+\end{Code}
+
+\subsubsection*{Normal prior with specific scales}
+
+To do ridge regression, one can cross-validate to find the optimal
+\code{lambda}:
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 + x | g), cov.prior = NULL,
+      fixef.prior = normal(sd = 1 / sqrt(lambda)))
+\end{Code}
+
+\subsubsection*{Normal prior with substantive information}
+
+With prior information for the scale of the fixed effects, it becomes
+necessary to model $\beta$ without using the common scale. Assuming
+that this information is in the matrix \code{Sigma.beta}, the
+\code{blmer} call to incorporate it is:
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 + x | g), cov.prior = NULL,
+      fixef.prior = normal(cov = Sigma.beta, common.scale = FALSE))
+\end{Code}
+
+\subsubsection*{$t$ prior for
+  logistic regression}
+
+\citet{gelman:2008:weakly_informative} recommend a Cauchy prior for logistic
+regression. \code{bglmer} fits an analogous mixed model by using an appropriately
+parameterized $t$ distribution:
+
+\begin{Code}
+bglmer(y ~ 1 + x + (1 + x | g), cov.prior = NULL,
+       family = binomial,
+       fixef.prior = t(df = 1, scale = 2.5^2))
+\end{Code}
+
+\subsection{Residual variance priors}
+\label{sec:blme:residPrior}
+
+A prior on the residual variance/common scale is specified in the same
+format as for fixed effects, but instead using the \code{resid.prior} argument to
+\code{blmer}. As discussed in section \ref{sec:glmms}, the generalized
+linear mixed models fit by \pkg{lme4} do not have a scale parameter.
+
+The named distributions that can be used are: \code{gamma},
+\code{invgamma}, \code{point}, and \code{NULL}/\code{flat}. Options and defaults are:
+
+\begin{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('gamma', blme:::residualVarianceGammaPrior)
+@
+  \begin{enumerate}
+  \item \code{shape} - non-negative scalar. For a shape of 0, the
+    prior is improper.
+  \item \code{rate} - non-negative scalar. For a rate of 0, the prior
+    is improper.
+  \item \code{posterior.scale} - one of \code{"sd"} or
+    \code{"var"}, corresponding to $\sigma \sim \Gamma({\rm shape},
+    {\rm rate})$ and $\sigma^2 \sim \Gamma({\rm shape}, {\rm rate})$ respectively.
+  \end{enumerate}
+  The default setting applies the improper prior $p(\sigma^2)\propto
+  (\sigma^2)^{-1}$.
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('invgamma', blme:::residualVarianceInvGammaPrior)
+@
+  \begin{enumerate}
+  \item \code{shape} - non-negative scalar. For a shape of 0, the
+    prior is improper.
+  \item \code{scale} - non-negative scalar. For a scale of 0, the prior
+    is improper.
+  \item \code{posterior.scale} - one of \code{"sd"} or
+    \code{"var"}, having the same interpretation as for \code{gamma}.
+  \end{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('point', blme:::lmmDistributions$point)
+@
+\\
+Fixes $\sigma^2$ to a specific value, and is equivalent to a
+  point-mass prior.
+  \begin{enumerate}
+  \item \code{value} - a positive scalar.
+  \item \code{posterior.scale} - one of \code{"sd"} or
+    \code{"var"}, having the same interpretation as for \code{gamma}.
+  \end{enumerate}
+\end{enumerate}
+
+\subsection{Residual variance example}
+
+A common use for residual variance priors is when the observations
+have known but unequal residual variances. Assuming that these are
+defined in the variable \code{resid.var}, this model can be fit in
+\code{blmer} by the call:
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 + x | g), cov.prior = NULL,
+      weights = 1 / resid.var,
+      resid.prior = point)
+\end{Code}
+
+\subsection{Random effect covariance priors}
+\label{sec:blme:covPriors}
+
+As with a mixed effect model there can be multiple
+grouping factors each with its own distinct covariance matrix,
+\pkg{blme} supports the specification of a default prior as well as
+priors specific to named levels. To apply a prior to single level, the
+input should be of the form:
+
+\begin{Code}
+  grouping.name ~ distribution.name(options.list)
+\end{Code}
+
+Conversely, to specify a default prior that applies to all grouping
+factors, the format is simply:
+\code{distribution.name(options.list)}. The distributions and their
+options are:
+
+\begin{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('gamma', blme:::lmmDistributions$gamma)
+@
+\\  Can only be used with univariate grouping factors.
+  \begin{enumerate}
+  \item \code{shape} - a non-negative scalar. For a shape of 0, the
+    prior is improper.
+  \item \code{rate} - a non-negative scalar. For a rate of 0, the
+    prior is improper.
+  \item \code{common.scale} - a logical that when true indicates that
+    the prior should be applied to the random effect covariance divided by
+    the residual variance while when false the prior is applied to the covariance
+    in the absolute sense. Note that this is slightly different than
+    the interpretation for fixed effects, as there it influenced the
+    scale and not the parameters themselves. Only applies to linear
+    mixed models. See sections
+    \ref{sec:math:commonScale} and \ref{sec:bmath:covPriors}.
+  \item \code{posterior.scale} - one of \code{"sd"} or \code{"var"}
+    corresponding to $\sqrt\Sigma_k \sim \Gamma({\rm shape}, {\rm rate}$
+    and $\Sigma_k \sim \Gamma({\rm shape}, {\rm rate}$ respectively.
+  \end{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('invgamma', blme:::lmmDistributions$invgamma)
+@
+  \begin{enumerate}
+  \item \code{shape} - a non-negative scalar. For a shape of 0, the
+    prior is improper.
+  \item \code{scale} - a non-negative scalar. For a scale of 0, the
+    prior is improper.
+  \item \code{common.scale} - logical with similar interpretation as
+    in the \code{gamma} case.
+  \item \code{posterior.scale} - one of \code{"sd"} or \code{"var"}
+    having a similar interpretation as for \code{gamma}.
+  \end{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('wishart', blme:::lmmDistributions$wishart)
+@
+\begin{enumerate}
+  \item \code{df} - a scalar greater than or equal to the number of
+    varying coefficients for a level, minus 1. When equal to the lower
+    bound, the prior is improper.
+  \item \code{scale} - a single value, a vector of length equal to the
+    grouping factor dimension, or an appropriately sized positive
+    definite matrix. For the first case, the value is multiplied by
+    the identity matrix; for the second, the vector is made into a
+    diagonal matrix. \code{Inf} is allowed, and yields an improper distribution.
+  \item \code{common.scale} - logical with similar interpretation as
+    in the \code{gamma} case.
+  \item \code{posterior.scale} - one of \code{"sqrt"} or \code{"var"}
+    having a similar interpretation as for \code{gamma}. Note that the
+    unique matrix square root can be expensive to compute, as the
+    optimization is not performed in this parameterization.
+  \end{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('invwishart', blme:::lmmDistributions$invwishart)
+@
+  \begin{enumerate}
+  \item \code{df} - a scalar greater than or equal to the number of
+    varying coefficients for a level, minus 1. When equal to the lower
+    bound, the prior is improper.
+  \item \code{scale} - a single value, a vector of length equal to the
+    grouping factor dimension, or an appropriately sized positive
+    definite matrix. For the first case, the value is multiplied by
+    the identity matrix; for the second, the vector is made into a
+    diagonal matrix. \code{0} is allowed, and yields an improper distribution.
+  \item \code{common.scale} - logical with similar interpretation as
+    in the \code{gamma} case.
+  \item \code{posterior.scale} - one of \code{"sqrt"} or \code{"var"}
+    having a similar interpretation as for \code{wishart}.
+  \end{enumerate}
+\item
+<<echo = FALSE, results = tex>>=
+functionToString('custom', blme:::lmmDistributions$custom)
+@
+\\ Can be used to apply an arbitrary function as a penalty
+  \begin{enumerate}
+  \item \code{fn} - function to be used as a prior. Must take an
+    argument as specified by \code{chol} and return a value as
+    specified by \code{scale}.
+  \item \code{chol} - a logical indicating whether or not \code{fn}
+    expects a covariance matrix (\code{FALSE}) or a {\em right}
+    Cholesky factor (\code{TRUE}).
+  \item \code{common.scale} - logical with same interpretation as
+    other cases. When \code{FALSE}, it is unknown if the residual
+    variance can be profiled and is thus is added to the set of
+    parameters for numeric optimization.
+  \item \code{scale} - one of \code{"none"}, \code{"log"}, or
+    \code{"dev"} corresponding to \code{fn} returning values on the scales
+   $p(\Sigma)$, $\log p(\Sigma)$, and $-2 \log p(\Sigma)$ respectively.
+ \end{enumerate}
+\end{enumerate}
+
+\subsection{Covariance examples}
+
+For the following, we now assume that there are two grouping factors,
+\code{g.1} and \code{g.2}.
+
+\subsubsection*{\pkg{lme4} fit}
+
+By default, \pkg{blme} applies a Wishart prior to the covariance of
+the random effects. By suppressing this, the following two calls are equivalent:
+
+\begin{Code}
+lmer (y ~ 1 + x + (1 | g.1) + (1 + x | g.2))
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = NULL)
+\end{Code}
+
+\subsubsection*{Univariate, default prior, standard deviation scale}
+
+The follow places a prior on the standard deviation of the
+contributions to the intercept for the first grouping factor:
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = gamma)
+\end{Code}
+
+As the prior was univariate, it does not extend to the second grouping
+factor. Instead, this remains unmodeled. If a third level with a
+single varying coefficient existed, the gamma prior would apply to
+that as well.
+
+\subsubsection*{Multivariate, default prior, variance scale}
+
+Using a Wishart as a default specializes down to a gamma for a
+univariate case and consequently applies to both grouping factors. The
+default for the Wishart is to use a posterior scale of a covariance,
+unlike the previous example.
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = wishart)
+\end{Code}
+
+\subsubsection*{Named grouping factors}
+
+We can mix the above examples by naming the grouping factors.
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = list(g.1 ~ gamma, g.2 ~ wishart))
+\end{Code}
+
+\subsubsection*{Default priors with options}
+
+As with univariate families there are no complications with level
+dimensions, it is easy to specify a default that applies in more than
+one case. For the following, we no longer model the random effects of
+the second grouping factor as having a varying slope.
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 | g.1) + (1 | g.2),
+      cov.prior = gamma(shape = 3, rate = 1, posterior.scale = 'var'))
+\end{Code}
+
+\subsubsection*{Fixed hyperparameters}
+
+The parent of the evaluating environment for the prior creation
+functions is set to the one which calls \code{blmer} so it is possible to
+use variables defined there.
+
+\begin{Code}
+g.2.cov <- matrix(c(1, 0.2, 0.2, 1), 2)
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = g.2 ~ wishart(scale = g.2.cov))
+\end{Code}
+
+\subsubsection*{Complex expressions}
+
+When used with default settings, the Wishart has its degrees of freedom set to
+the number of coefficients varying at a grouping factor plus 2.5. The
+following applies a default prior that penalizes the covariance for each level
+by a term that is $|\Sigma_k|^{1/2}$. This results in a linear term on
+the standard deviation when there is only one varying coefficient.
+
+\begin{Code}
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = wishart(df = level.dim + 2))
+\end{Code}
+
+For a Wishart distribution with $\nu$ degrees of freedom, $q_k$
+dimension, and a scale matrix of $\Psi$, its mode is given by $(\nu -
+q_k - 1)\Psi$. We can thus construct a proper verison of the Wishart
+prior that is parameterized by its degrees of freedom and mode and use
+this as a default.
+
+\begin{Code}
+prior.mode <- 1e-4
+blmer(y ~ 1 + x + (1 | g.1) + (1 + x | g.2),
+      cov.prior = wishart(scale = diag(prior.mode, q.k) / (df - q.k - 1)))
+\end{Code}
+
+\subsubsection*{Custom prior}
+
+\TODO{REF} recommends a half-Cauchy prior for variance components in
+linear mixed models. For univariate grouping factors,
+
+\begin{Code}
+penaltyFn <- function(sigma) dcauchy(sigma, 0, 10, log = TRUE)
+blmer(y ~ 1 + x + (1 | g.1) + (1 | g.2),
+      cov.prior = custom(penaltyFn, chol = TRUE, scale = "log"))
+\end{Code}
+
+\subsection[blme output]{\code{blme} output}
+
+\pkg{blme} functions return objects that inherit from the \pkg{lme4}
+base classes. For linear models, the result is a \code{blmerMod}
+derived from \code{lmerMod}, while in the general case the result is
+of class \code{bglmerMod}, derived from \code{glmerMod}.
+
+The \code{summary} function for each highlights the main
+differences from \pkg{lme4}.
+
+<<echo = FALSE, results = tex, strip.white = false>>=
+cat("\\begin{CodeChunk}\n")
+cat("\\begin{CodeInput}\n")
+cat("> summary(fm1 <- lmer(Reaction ~ Days + (Days | Subject), sleepstudy))\n");
+cat("\\end{CodeInput}\n")
+cat("\\begin{CodeOutput}\n")
+fm1 <- lmer(Reaction ~ Days + (Days | Subject), sleepstudy)
+lmerOutput <- capture.output(summary(fm1))
+cat(lmerOutput, sep = "\n")
+cat("\\end{CodeOutput}\n")
+
+cat("\\begin{CodeInput}\n")
+cat("> summary(bm1 <- blmer(Reaction ~ Days + (Days | Subject), sleepstudy))\n");
+cat("\\end{CodeInput}\n")
+cat("\\begin{CodeOutput}\n")
+bm1 <- blmer(Reaction ~ Days + (Days | Subject), sleepstudy)
+blmerOutput <- capture.output(summary(bm1))
+
+for (i in 1:length(blmerOutput)) {
+  output.i <- commaColumnWrap(blmerOutput[i], 80)
+  if (length(output.i) == 1) {
+    cat(output.i, "\n", sep = "")
+  } else {
+    cat(output.i[1], "\n", sep = "")
+    cat("           : ", output.i[2], "\n", sep = "")
+  }
+}
+cat("\\end{CodeOutput}\n")
+cat("\\end{CodeChunk}\n")
+@ 
+
+Aside from the different point estimates, the first lines of output a)
+provide a textual summary of the priors used and b) quantify the
+contribution of the priors to the objective function. This information
+can also be accessed directly from the fitted result.
+
+<<>>=
+bm1@priors
+round(bm1@devcomp$cmp, 3)
+@ 
+
+This enables a direct comparison of the distance of the fit from the
+maximum likelihood or REML estimate.
+
+<<echo=FALSE>>=
+rm(output.i, i)
+rm(fm1, lmerOutput, bm1, blmerOutput)
+@ 
+
+\section{Examples}
+
+\subsection{Complete separation for mixed models with binary outcomes}
+\label{sec:eg:fixef}
+
+<<echo = FALSE>>=
+source(file.path(sourceDir, "culcita.R"))
+@
+
+Complete and quasi-complete separation are problems that arise in generalized linear
+multinomial regressions which result in an unbounded likelihood
+\citep{albert_anderson:1984:existence}. Complete separation occurs when there
+is a linear combination of predictors that perfectly divides the data into
+its cases, {\em i.e.} perfect prediction. Quasi-complete separation is when such
+perfect prediction is possible for a strict subset of the observations. In either case,
+the maxmimum likelihood estimate fails to exist.
+
+In generalized linear mixed models with binomial outcomes, complete and quasi-complete
+separation can also occur and results in large estimates of the fixed effects and/or
+convergence failures. However, a similar phenomenon is also observable wherein some
+combination of random effects yields a perfectly predictable subset. Because the random
+effects are modeled, one alone cannot go to infinity without decreasing the conditional
+probability associated with the other random effects, however this separation-related
+phenomenon can result in large estimates of the covariance of the random effects.
+Estimates of the fixed effects are also 
+
+\citet{mckeon:2012:defender} report an experiment on the frequency of
+predation of coral reefs and the effect of cohabiting crustaceans who
+defending the colony. The data consist of four treatment groups corresponding
+to combinations of symbiotic species, and for each treatment pairs of observations are
+made across 10 temporal blocks. Exploring the data, we find:
+
+<<>>=
+culcita[1:5,]
+table(culcita$block)
+levels(culcita$ttt)
+@ 
+
+Using \code{glmer} we can fit a generalized linear mixed model with binomial response and
+a logistic link function that allows for a random effect corresponding
+to the temporal block. Following
+\citet{gelman:2008:weakly_informative}, we standardize binary inputs by
+centering them to have a mean of 0 and store the result in
+\code{culcita.z}. For compactness, we use the \code{display} function
+from the \pkg{arm} package to show the fit.
+
+<<eval = FALSE>>=
+m1 <- glmer(predation ~ tttcrabs + tttshrimp + tttboth + (1 | block),
+            culcita.z, family = binomial)
+display(m1)
+@ 
+<<echo = FALSE>>=
+display(m1)
+@ 
+
+A closer look at the data reveals that the model's stability hinges on
+the presence of a single observation. In fact, in the control group there are
+only two observations that fail to exhibit predation, one in the first
+block and one in the 10th.
+
+<<>>=
+with(culcita, sum(predation == 0 & ttt == "none"))
+@ 
+
+If for the control no observations were positive, then the likelihood
+could be made arbitrarily large by increasing the value of the
+control group's coefficient, {\em i.e.} quasi-complete separation. On
+the other hand, in the first temporal block only one observation
+shows predation. Furthermore, it contains one of the two observations
+that are preventing separation.
+
+<<>>=
+subset(culcita, block == 1)
+@ 
+
+These two circumstances combine so that removing the negative
+case for the control group in the 10th temporal block nearly makes the
+problem ill-posed. For consistency, we also remove its pair and re-standardize the
+result in the variable \code{culcitaSep.z}.  The
+fitted generalized linear mixed model yields substantially different
+estimates.
+
+<<eval = FALSE>>=
+m2 <- glmer(predation ~ tttcrabs + tttshrimp + tttboth + (1 | block),
+            culcitaSep.z, family = binomial)
+display(m2)
+@ 
+
+<<echo = FALSE>>=
+display(m2)
+@ 
+
+For example, the fixed effect for the intercept jumped from
+\Sexpr{round(m1@beta[1], 2)} to \Sexpr{round(m2@beta[1], 2)}
+corresponding to a change in baseline probability of 
+\Sexpr{round(invlogit(m1@beta[1]), 2)} to 
+\Sexpr{round(invlogit(m2@beta[1]), 2)}, most of the reported statistical
+signifiance is lost, and the standard deviation of the random effects
+went from
+\Sexpr{round(as.numeric(attr(VarCorr(m1)[[1]], "stddev")), 2)} to
+\Sexpr{round(as.numeric(attr(VarCorr(m2)[[1]], "stddev")), 2)}.
+
+While this is not strictly quasi-complete separation, the
+situation is similar. The joint distribution of the observations and the
+random effects can be made large by making the intercept a large
+positive value and the random effect for the first block highly
+negative. The extent to which this is possible depends on the
+covariance of the random effects, which in turn is inflated. The model
+only remains identifiable because the covariance cannot increase indefinitely.
+
+While not as good as having the full data, with \code{bglmer} it is
+possible to at least obtain sensible estimates. \citet{gelman:2008:weakly_informative} recommends the use
+of a Cauchy prior with a scale between 0.75 and 2.5 for non-hierarchical logistic
+regressions. With the knowledge that the problem is biased towards
+large parameter values, we opt for the smaller scale parameter.
+
+<<eval = FALSE>>=
+m3 <- bglmer(predation ~ tttcrabs + tttshrimp + tttboth + (1 | block),
+             culcitaSep.z, family = binomial,
+             cov.prior = NULL, fixef.prior = t(1, 0.75))
+display(m3)
+@ 
+
+<<echo = FALSE>>=
+display(m3)
+@ 
+
+The point estimates are all still greater in magnitude than the
+maximum likelihood ones for the full data, but are now on the same
+scale. This can be visualized in figure
+\ref{fig:culcita}, which shows the profiled objectives for the three models as functions of the
+standard deviation of the random effects alone.
+
+<<echo = FALSE>>=
+rm(culcita, culcita.z, culcitaSep, culcitaSep.z)
+rm(m1, m2, m3)
+rm(invlogit)
+@ 
+
+\begin{figure}[t]
+  \centering \includegraphics{culcita}
+  \caption{Objective functions for the three models of
+    \ref{sec:eg:fixef}. The $x$ axis corresponds to the standard deviation of
+    the random effects, denoted $\sigma_u$. Fixed effects have been
+    profiled out numerically. For the likelihood with complete data
+    (\code{m1}) and the posterior with a Cauchy prior on the fixed
+    effects but incomplete
+    data (\code{m3}), the curves rescaled so that they roughly integrate to
+  1. For \code{m2}, the rescaling was chosen to facilitate visual comparison.}
+  \label{fig:culcita}
+\end{figure}
+
+\section{References}
+\bibliography{blme}
+
+\section{Appendix}
+\label{sec:appendix}
+
+\subsection[The joint mode in u and beta]{The joint mode in $u$ and $\beta$}
+\label{sec:appendix:jointMode}
+
+Here we write out expressions to find the mode of the joint density of
+$y$ and $u$ (equation \ref{eq:jointDensity}) in $u$ and $\beta$. If we
+write $z = \begin{bmatrix}y \\ 0 \end{bmatrix}$,
+$V = \begin{bmatrix} Z\Lambda & X \\ I_Q & 0 \end{bmatrix}$,
+and $\gamma = \begin{bmatrix} u \\ \beta \end{bmatrix}$ then we
+would have a normal equations problem with the maximizer $\hat{\gamma} =
+(V^\top V)^{-1} V^\top z$. The goal is
+to do this calculation while preserving the sparsity of $Z$ and
+$\Lambda$, which requires operating block-wise.
+
+Utilizing the decomposition from equation \ref{eq:blockDecomp} and
+recalling our notation that $\tilde{u}$ and $\tilde{\beta}$ denote the
+mode, we have
+
+\begin{alignat*}{3}
+  \begin{bmatrix} \tilde{u} \\ \tilde{\beta} \end{bmatrix} & =
+  \left(\begin{bmatrix} L_Z & 0 \\ L_{ZX} & L_X \end{bmatrix}
+    \begin{bmatrix} L_Z^\top & L_{ZX}^\top \\ 0 & L_X^\top \end{bmatrix}\right)^{-1}
+  \begin{bmatrix}\Lambda^\top Z^\top & I_Q \\ X^\top &
+    0 \end{bmatrix} \begin{bmatrix}y \\ 0 \end{bmatrix}, \\
+%% line break
+  & = \begin{bmatrix} L_Z^{-\top} & -L_Z^{-\top}L_{ZX}^\top
+    L_X^{-\top} \\ 0 & L_X^{-\top} \end{bmatrix}
+  \begin{bmatrix} L_Z^{-1} & 0 \\
+    -L_X^{-1}L_{ZX}L_Z^{-1} & L_X^{-\top} \end{bmatrix}
+  \begin{bmatrix} \Lambda^\top Z^\top y \\ X^\top y \end{bmatrix}, \\
+%% line break
+  & = \begin{bmatrix} L_Z^{-\top} & -L_Z^{-\top}L_{ZX}^\top
+    L_X^{-\top} \\ 0 & L_X^{-\top} \end{bmatrix}
+  \begin{bmatrix}
+    L_Z^{-1} \Lambda^\top Z^\top y \\
+    L_X^{-1}\left(X^\top y - L_{ZX}L_Z^{-1}\Lambda^\top Z^\top y\right)
+  \end{bmatrix} \\
+%% line break
+  & = \begin{bmatrix} L_Z^{-\top} & -L_Z^{-\top}L_{ZX}^\top
+    L_X^{-\top} \\ 0 & L_X^{-\top} \end{bmatrix}
+  \begin{bmatrix}
+    u' \\ L_X^{-1} \left(X^\top y - L_{ZX}u'\right) \end{bmatrix}
+  & \text{for } u' = L_Z^{-1}\Lambda^\top Z^\top y, \\
+%% line break
+  & = \begin{bmatrix} L_Z^{-\top} & -L_Z^{-\top}L_{ZX}^\top
+    L_X^{-\top} \\ 0 & L_X^{-\top} \end{bmatrix}
+  \begin{bmatrix} u' \\ \beta' \end{bmatrix} & \text{for } \beta' =
+  L_X^{-1}\left(X^\top y - L_{ZX} u'\right), \\
+%% line break
+  & = \begin{bmatrix} L_Z^{-\top} \left( u' - L_{ZX}^\top L_X^{-\top}
+      \beta' \right) \\ L_X^{-\top}\beta' \end{bmatrix}.
+\end{alignat*}
+
+\noindent To find the joint mode, one then finds in order $u', \beta',
+\tilde{\beta},$ and $\tilde{u}$. Every operation involving $L_Z$ and
+$Z\Lambda$ can be done efficiently thanks to sparsity.
+
+<<>>=
+ls()
+@ 
+\end{document}

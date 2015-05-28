@@ -1,0 +1,75 @@
+2015-05-28 Vincent Dorie <vjd4@nyu.edu>
+
+  * Changed testing framework to testthat from RUnit
+  * Brought parity with lme4 1.1-8
+  * Overload refit generic so that it gets the correct deviance function
+
+2015-03-10 Vincent Dorie <vjd4@nyu.edu>
+
+  * Fixed bug with t prior display on scalar variable
+
+2014-08-14 Vincent Dorie <vjd4@nyu.edu>
+
+  * Now correctly stores lme4 convergence warnings
+
+2014-07-09 Vincent Dorie <vjd4@nyu.edu>
+
+  * added CITATION file
+
+2014-02-05 16:56 Vincent Dorie <vjd4@nyu.edu>
+
+  * Brought to parity with the latest lme4 release (1.1-6).
+  * Bug fixes:
+      quadratic term for normal priors calculated incorrectly when using non-zero correlations
+      glmms could fail to apply full penalty term for mixed use of covariance priors
+  * New features:
+      t priors for fixed effects
+      custom priors for ranef covariances
+
+2013-09-13 03:30 Vincent Dorie <vjd4@nyu.edu>
+
+  * Complete re-write for lme4 version 1.0.
+
+2013-08-12 10:25 Vincent Dorie <vjd4@nyu.edu>
+
+  * Minor addition to testing suite set of functions. Upgraded to lme4 0.999999-2.
+  * Changed dependency to lme4.0.
+
+2012-11-13 10:25 Vincent Dorie <vjd4@nyu.edu>
+
+  * Common scale is now optional for random effect covariance, specified with the "common.scale" parameter and taking values TRUE/FALSE.
+  * Covariance priors can now all be improper.
+  * Common scale prior can now be inverse gamma on sd, or gamma.
+  * Reworked how the penalized weighted residual sum of squares is calculated, as it may not make sense depending on what priors are used.
+  * Brought to parity with the latest version of lme4, 0.999999 or so.
+  * Eliminated a false zero problem wherein the optimizer takes an initial step to the boundary and get stuck due to a flat likelihood.
+
+2012-10-13 10:11 Vincent Dorie <vjd4@nyu.edu>
+
+  * blme now ignores the common scale when penalizing the random effect covariance. In previous versions it multiplied it in but didn't take the prior into account when profiling it out - in essence failing to correspond to a probabilistic model. The next version will allow the prior to be on the scale-free covariance, or on the real-world covariance matrix. For now, just the scale-free version.  ** This means the fitted models will be different than previous versions.  **
+  * Reduced the default shape for random-effect covariance posteriors on the variance scale so that the polynomial term has an exponent of 1 in the univariate case. The multivariate now has df of dim + 1 to correspond.
+  * Fixed a few typos in the documentation.
+  * Cleaned up imports from NAMESPACE file.
+  * Replaced a .Internal call.
+
+2012-03-09 13:01 Vincent Dorie <vjd4@nyu.edu>
+
+  * Fixed off-by one bug on termination of the optimization loop which caused gradient evaluation steps to be reported a the maximum.
+  * REML optimization for sigma with a fixef prior was slightly off.
+  * sigma now accepts inverse gamma priors (improper, as well).
+  * Internal version of sim().
+
+
+2011-12-15 17:40 Vincent Dorie <vjd4@nyu.edu>
+
+  * Prevented summary from printing misc. lines when only one covariance prior is implemented. Gaussian fixed effects priors summarize in terms of their covariance correctly when the covariance is diagonal or a scalar times the identity.
+
+
+2011-11-15 17:03 Vincent Dorie <vjd4@nyu.edu>
+
+  * Fixed a bug related to the scaling of priors to the data in the presence of interactions.
+  * Added point priors on the common scale, enabling meta-analyses.
+
+
+2010-12-19 19:27 Vincent Dorie <vjd4@nyu.edu>
+  * Initial version.
