@@ -1,3 +1,8 @@
+## copyright note:
+##   a lot of of this was copy/pasted from the lme4 package (http://cran.r-project.org/web/packages/lme4/index.html, GPL-2)
+##   a lot of it was not
+## ideally, blme wouldn't have to recreate the functions with minor tweaks but we're just no there yet
+
 ## for R-check
 wishart <- "ignored"
 
