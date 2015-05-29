@@ -56,7 +56,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
     ## turn 'wishart' into 'wishart()'
     if (is.symbol(covPrior.i)) covPrior.i <- call(as.character(covPrior.i))
     
-    if (isFormula(covPrior.i)) {
+    if (is.formula(covPrior.i)) {
       factorName <- as.character(covPrior.i[[2]])
 
       if (!(factorName %in% factorNames))

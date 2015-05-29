@@ -120,6 +120,7 @@ bglmer(formula, data, family = gaussian,
 }
 \examples{
 ##  covariance prior
+data("sleepstudy", package = "lme4")
 (fm1 <- blmer(Reaction ~ Days + (0 + Days|Subject), sleepstudy,
               cov.prior = gamma))
 (fm2 <- blmer(Reaction ~ Days + (0 + Days|Subject), sleepstudy,

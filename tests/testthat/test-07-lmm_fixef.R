@@ -46,6 +46,8 @@ test_that("blmer fits sleep study example in documentation", {
   oldWarnings <- options()$warn
   options(warn = 2)
   
+  data("sleepstudy", package = "lme4")
+  
   fit <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
                cov.prior = NULL, resid.prior = NULL,
                fixef.prior = "normal")

@@ -99,7 +99,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
 
   args <- list(rho = devFunEnv, opt = opt, reTrms = lmod$reTrms, fr = lmod$fr, mc = mcout)
   if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
-  result <- do.call("mkMerMod", args, TRUE, sys.frame(0))
+  result <- do.call(mkMerMod, args, TRUE, sys.frame(0))
   result <- repackageMerMod(result, opt, devFunEnv)
   
   return(result)
@@ -182,7 +182,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
     if (!is.null(formals(optimizeGlmer)$boundary.tol)) args$boundary.tol <- if (nAGQ == 0) control$boundary.tol else 0
     if (!is.null(formals(optimizeGlmer)[["..."]])) args$calc.derivs <- FALSE
     
-    opt <- do.call("optimizeGlmer", args, TRUE, sys.frame(0))
+    opt <- do.call(optimizeGlmer, args, TRUE, sys.frame(0))
   }
   
   if(nAGQ > 0L) {
@@ -207,7 +207,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
       args$use.last.params <- control$use.last.params
     }
     ## reoptimize deviance function over covariance parameters and fixed effects
-    opt <- do.call("optimizeGlmer", args, TRUE, sys.frame(0))
+    opt <- do.call(optimizeGlmer, args, TRUE, sys.frame(0))
   }
 
   lme4Namespace <- getNamespace("lme4")
@@ -223,7 +223,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   ## prepare output
   args <- list(rho = environment(devfun), opt = opt, reTrms = glmod$reTrms, fr = glmod$fr, mc = mcout)
   if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
-  result <- do.call("mkMerMod", args, TRUE, sys.frame(0))
+  result <- do.call(mkMerMod, args, TRUE, sys.frame(0))
   result <- repackageMerMod(result, opt, environment(devfun))
   
   return(result)
@@ -653,7 +653,7 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
           args$calc.derivs <- calc.derivs
           args$use.last.params <- if (!is.null(control$use.last.params)) control$use.last.params else FALSE
         }
-        do.call("optimizeGlmer", args, TRUE, sys.frame(0))
+        do.call(optimizeGlmer, args, TRUE, sys.frame(0))
       }
     cc <- NULL
     if (exists("checkConv", lme4Namespace)) {
@@ -668,8 +668,7 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
                  reTrms = reTrms,
                  fr = object@frame, mc = getCall(object))
     if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
-    result <- do.call("mkMerMod", args, TRUE, sys.frame(0))
+    result <- do.call(mkMerMod, args, TRUE, sys.frame(0))
 
     repackageMerMod(result, opt, environment(ff)) 
 }
-

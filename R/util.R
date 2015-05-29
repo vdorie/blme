@@ -19,7 +19,7 @@ namedList <- function(...) {
   setNames(result, resultNames)
 }
 
-isFormula <- function(term) is.language(term) && term[[1]] == '~'
+is.formula <- function(term) is.language(term) && term[[1]] == '~'
 
 #quoteInNamespace <- function(name, character.only = FALSE) {
 #  result <- quote(a + b)

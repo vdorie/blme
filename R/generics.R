@@ -43,9 +43,6 @@ summary.summary.bmerMod <- function(object, varcov = TRUE, ...) {
   getS3method("summary", "summary.merMod")(object, varcov, ...)
 }
 
-
-##' @importFrom stats vcov
-##' @S3method vcov summary.merMod
 vcov.summary.bmerMod <- function(object, correlation = TRUE, ...) {
   getS3method("vcov", "summary.merMod")(object, correlation, ...)
 }

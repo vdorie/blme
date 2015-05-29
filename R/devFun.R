@@ -178,7 +178,7 @@ getSigmaProfiler <- function(priors, blmerControl) {
 
       df <- nrow(pp$X) - resp$REML + blmerControl$df
 
-      return (sqrt(pwrss / df))
+      sqrt(pwrss / df)
     })
   } else if (sigmaOptimizationType == SIGMA_OPTIM_SQ_QUADRATIC) {
     return (function(pp, resp, exponentialTerms, blmerControl) {
@@ -190,7 +190,7 @@ getSigmaProfiler <- function(priors, blmerControl) {
 
       disc <- sqrt(df^2 + 4 * pwrss * a)
       
-      return (sqrt((disc - df) / (2 * a)))
+      sqrt((disc - df) / (2 * a))
     })
   } else if (sigmaOptimizationType == SIGMA_OPTIM_QUADRATIC) {
     return (function(pp, resp, exponentialTerms, blmerControl) {
@@ -201,7 +201,8 @@ getSigmaProfiler <- function(priors, blmerControl) {
       df <- nrow(pp$X) - resp$REML + blmerControl$df
 
       disc <- sqrt(a^2 + 16 * df * pwrss)
-      return (0.25 * (disc + a) / df)
+      
+      0.25 * (disc + a) / df
     })
   } else stop("illegal sigma optimization type")
 }
