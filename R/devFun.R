@@ -78,7 +78,6 @@ updateBglmerDevfun <- function(devfun, reTrms, nAGQ = 1L) {
   devfun <- updateGlmerDevfun(devfun, reTrms, nAGQ = nAGQ)
   devFunEnv <- environment(devfun)
   devFunBody <- getBglmerDevianceFunctionBody(devFunEnv, nAGQ != 0L)
-  ## devFunBody <- testGetBglmerDevianceFunctionBody(devfun)
 
   if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
 

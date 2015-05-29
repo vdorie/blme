@@ -35,7 +35,7 @@ getStartingValues <- function(userStart, devFunEnv, parInfo) {
   invalidStartingValues <- !(names(userStart) %in% names(parInfo))
   if (any(invalidStartingValues))
     warning("starting values for parameter(s) '", toString(names(userStart)[invalidStartingValues]),
-            "' not part of model and will be ignored.")
+            "' not part of model and will be ignored")
 
   start <- numeric(sum(sapply(parInfo, function(par.i) par.i$length)))
   offset <- 0L
@@ -60,6 +60,20 @@ getStartingValues <- function(userStart, devFunEnv, parInfo) {
     offset <- offset + parLength
   }
   start
+}
+
+extractParameterListFromFit <- function(fit, blmerControl) {
+  result <- list(theta = fit@theta)
+  if (blmerControl$fixefOptimizationType == FIXEF_OPTIM_NUMERIC) {
+    if (fit@devcomp$dims[["GLMM"]] != 0L)
+      result$fixef <- fit@beta
+    else
+      result$beta  <- fit@beta
+  }
+  if (fit@devcomp$dims[["GLMM"]] == 0L && blmerControl$fixefOptimizationType == SIGMA_OPTIM_NUMERIC) {
+    result$sigma <- if (fit@devcomp$dims[["REML"]] == 0L) fit@devcomp$cmp[["sigmaML"]] else fit@devcomp$cmp[["sigmaREML"]]
+  }
+  result
 }
 
 getLowerBounds <- function(parInfo) {
@@ -90,7 +104,7 @@ getParInfo <- function(pred, resp, ranefStructure, blmerControl) {
     result[[numPars]] <-
       list(length = numFixef,
              lower = rep(-Inf, numFixef),
-             default = function(devFunEnv) pred$delb)
+             default = function(devFunEnv) pred$beta0 + pred$delb)
     names(result)[[numPars]] <- "beta"
   }
   if (blmerControl$sigmaOptimizationType == SIGMA_OPTIM_NUMERIC) {

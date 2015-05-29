@@ -65,7 +65,6 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   lmerStart <- NULL
   if (!is.null(start) && is.list(start) && length(start) > 1)
     lmerStart <- start$theta
-  
   devfun <- do.call(mkBlmerDevfun,
                     c(lmod, lmod$X, lmod$reTrms,
                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior, residPrior = resid.prior),
@@ -74,7 +73,6 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   if (devFunOnly) return(devfun)
   
   devFunEnv <- environment(devfun)
-
   opt <- optimizeLmer(devfun,
                       optimizer=control$optimizer,
                       restart_edge=control$restart_edge,
@@ -97,7 +95,6 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   args <- list(rho = devFunEnv, opt = opt, reTrms = lmod$reTrms, fr = lmod$fr, mc = mcout)
   if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
   result <- do.call("mkMerMod", args, TRUE, sys.frame(0))
-  
   result <- repackageMerMod(result, opt, devFunEnv)
   
   return(result)
@@ -529,26 +526,14 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
     }
     
     if(isLMM(object)) {
-        rr <- mkRespMod(model.frame(object), REML = isREML(object))
+        ## rr <- mkRespMod(model.frame(object), REML = isREML(object))
+      rr <- mkRespMod(model.frame(object), REML = object@devcomp$dims[["REML"]])
     } else if(isGLMM(object)) {
         rr <- mkRespMod(model.frame(object), family = family(object))
     } else {
         stop("refit.bmerMod not working for nonlinear mixed models")
     }
     
-    ## blme additions
-    if (FALSE) {
-    fixef.prior <- object@call$fixef.prior
-    cov.prior <-
-      if (!any(names(object@call) == "cov.prior")) { if (isLMM(object)) formals(blmer)$cov.prior else formals(bglmer)$cov.prior }
-      else object@call$cov.prior
-    if (isLMM(object)) {
-      resid.prior <-
-        if (!any(names(object@call) == "resid.prior") && any(names(object@call) == "var.prior")) object@call$var.prior
-        else object@call$resid.prior
-    }
-    }
-
     if(!is.null(newresp)) {
         if(family(object)$family == "binomial") {
             ## re-do conversion of two-column matrix and factor
@@ -574,6 +559,9 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
                   length(rr$y))
 
     }
+    lme4Namespace <- getNamespace("lme4")
+    glmerPwrssUpdate <- get("glmerPwrssUpdate", lme4Namespace)
+    
     ## hacking around to try to get internals properly set up
     ##  for refitting.  This helps, but not all the way ...
     ## oldresp <- rr$y # set this above from before copy
@@ -594,8 +582,7 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
     ##              control$tolPwrss, as.integer(30), # maxit = 30
     ##              verbose)
     ##        lp0         <- pp$linPred(1) # each pwrss opt begins at this eta
-    lme4Namespace <- getNamespace("lme4")
-    glmerPwrssUpdate <- get("glmerPwrssUpdate", lme4Namespace)
+
     devlist <-
 	if (isGLMM(object)) {
 	    baseOffset <- object@resp$offset
@@ -612,16 +599,23 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
 		 pp=pp, resp=rr, u0=pp$u0, verbose=verbose, dpars=seq_len(nth))
 	} else
 	    list(pp=pp, resp=rr, u0=pp$u0, verbose=verbose, dpars=seq_len(nth))
-    ## blme change
+    
+    ## blme changes
     ff <- makeRefitDevFun(list2env(devlist), nAGQ=nAGQ, verbose, object = object)
-    ## rho <- environment(ff)
+    environment(ff)$lower <- object@lower
+    reTrms <- list(flist=object@flist, cnms=object@cnms, Gp=object@Gp, lower=object@lower)
+    if (isGLMM(object)) {
+      ff <- updateBglmerDevfun(ff, reTrms, nAGQ)
+    }
+    ## blme end
+    
     xst       <- rep.int(0.1, nth)
-    x0        <- pp$theta
-    lower     <- object@lower
+    ## x0        <- pp$theta
+    ## lower     <- object@lower
     if (!is.na(nAGQ) && nAGQ > 0L) {
         xst   <- c(xst, sqrt(diag(pp$unsc())))
-        x0    <- c(x0, unname(fixef(object)))
-        lower <- c(lower, rep(-Inf,length(x0)-length(lower)))
+        ## x0    <- c(x0, unname(fixef(object)))
+        ## lower <- c(lower, rep(-Inf,length(x0)-length(lower)))
     }
     ## control <- c(control,list(xst=0.2*xst, xt=xst*0.0001))
     ## FIX ME: allow use.last.params to be passed through
@@ -632,29 +626,27 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
         rho$lp0 <- rho$pp$linPred(1)
     }
     
+    ## blme changes below
     opt <-
       if (isLMM(object)) {
         optimizeLmer(ff,
-                     optimizer=control$optimizer,
-                     restart_edge=control$restart_edge,
-                     boundary.tol=control$boundary.tol,
-                     control=control$optCtrl,
-                     verbose=verbose,
-                     start=object@theta,
-                     calc.derivs=control$calc.derivs,
-                     use.last.params=control$use.last.params)
+                     optimizer = object@optinfo$optimizer,
+                     control = control$optCtrl,
+                     verbose = verbose,
+                     start = extractParameterListFromFit(object, environment(ff)$blmerControl),
+                     calc.derivs = calc.derivs,
+                     use.last.params = if (!is.null(control$use.last.params)) control$use.last.params else FALSE)
       } else {
         args <- list(devfun = ff,
-                     optimizer = control$optimizer[[2]],
-                     restart_edge = control$restart_edge,
-                     start = start,
+                     optimizer = object@optinfo$optimizer,
+                     start = extractParameterListFromFit(object, environment(ff)$blmerControl),
                      nAGQ = nAGQ,
+                     boundary.tol = 1.0e-5,
                      verbose = verbose,
                      stage = 2)
-        if (!is.null(formals(optimizeGlmer)$boundary.tol)) args$boundary.tol <- control$boundary.tol
         if (!is.null(formals(optimizeGlmer)[["..."]])) {
-          args$calc.derivs <- control$calc.derivs
-          args$use.last.params <- control$use.last.params
+          args$calc.derivs <- calc.derivs
+          args$use.last.params <- if (!is.null(control$use.last.params)) control$use.last.params else FALSE
         }
         do.call("optimizeGlmer", args, TRUE, sys.frame(0))
       }
@@ -668,7 +660,7 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
     if (isGLMM(object)) rr$setOffset(baseOffset)
     
     args <- list(rho = environment(ff), opt = opt,
-                 reTrms = list(flist=object@flist, cnms=object@cnms, Gp=object@Gp, lower=object@lower),
+                 reTrms = reTrms,
                  fr = object@frame, mc = getCall(object))
     if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
     result <- do.call("mkMerMod", args, TRUE, sys.frame(0))
