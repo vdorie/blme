@@ -24,8 +24,11 @@ mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
 }
 
 mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
-                          control=glmerControl(), priors = NULL, ...) {
-  devfun <- mkGlmerDevfun(fr, X, reTrms, family, nAGQ, verbose, control, ...)
+                           maxit = 100L,
+                           control=glmerControl(),
+                           priors = NULL, ...) {
+  devfun <- mkGlmerDevfun(fr, X, reTrms, family, nAGQ, verbose,
+                          maxit, control, ...)
   devFunEnv <- environment(devfun)
   pred <- devFunEnv$pp
   resp <- devFunEnv$resp
@@ -49,10 +52,11 @@ mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
   devfun
 }
 
-makeRefitDevFun <- function(env, nAGQ = 1L, verbose = 0, control = list(),
+makeRefitDevFun <- function(env, nAGQ = 1L, verbose = 0, maxit=100L,
+                            control = list(),
                             object) {
   lme4Env <- asNamespace("lme4")
-  devfun <- get("mkdevfun", lme4Env)(env, nAGQ, verbose, control)
+  devfun <- get("mkdevfun", lme4Env)(env, nAGQ, maxit, verbose, control)
   
   pred <- env$pp
   resp <- env$resp
@@ -322,14 +326,14 @@ getBglmerDevianceFunctionBody <- function(devFunEnv, fixefAreParams)
   if (!fixefAreParams) {
     cat("  spars <- rep(0, ncol(pp$X));\n",
         "  pp$setTheta(as.double(theta));\n",
-        "  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, verbose);\n",
+        "  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, maxit=maxit, verbose=verbose);\n",
         sep = "")
   } else {
     cat("  pp$setTheta(as.double(pars[dpars]));\n",
         "  spars <- as.numeric(pars[-dpars]);\n",
         "  offset <- if (length(spars) == 0) baseOffset else baseOffset + pp$X %*% spars;\n",
         "  resp$setOffset(offset);\n\n",
-        "  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, verbose);\n",
+        "  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, maxit=maxit, verbose=verbose);\n",
         sep = "")
   }
   

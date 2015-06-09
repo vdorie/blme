@@ -106,7 +106,8 @@ blmer <- function(formula, data = NULL, REML = TRUE,
 }
 
 bglmer <- function(formula, data = NULL, family = gaussian,
-                   control = glmerControl(), start = NULL, verbose = 0L, nAGQ = 1L,
+                   control = glmerControl(), start = NULL, verbose = 0L,
+                   maxit = 100L, nAGQ = 1L,
                    subset, weights, na.action, offset,
                    contrasts = NULL, mustart, etastart, devFunOnly = FALSE,
                    cov.prior = wishart, fixef.prior = NULL,
@@ -155,7 +156,9 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   
   devfun <- do.call(mkBglmerDevfun, c(glmod, glmod$X, glmod$reTrms,
                                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior),
-                                           verbose = verbose, control = control, nAGQ = 0)))
+                                           verbose = verbose,
+                                           maxit = maxit,
+                                           control = control, nAGQ = 0)))
   if (nAGQ==0 && devFunOnly) return(devfun)
   ## optimize deviance function over covariance parameters
   
@@ -444,7 +447,8 @@ runOptimizerWithPrior <- function(regression, cov.prior = NULL,
 }
 }
 
-refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
+refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE,
+                          maxit=100L, ...)
 {
 
     newControl <- NULL
@@ -607,6 +611,7 @@ refit.bmerMod <- function(object, newresp=NULL, rename.response=FALSE, ...)
     
     ## blme changes
     ff <- makeRefitDevFun(list2env(devlist), nAGQ=nAGQ, verbose, object = object)
+    environment(ff)$maxit <- maxit  ## HACK ...
     environment(ff)$lower <- object@lower
     reTrms <- list(flist=object@flist, cnms=object@cnms, Gp=object@Gp, lower=object@lower)
     if (isGLMM(object)) {
