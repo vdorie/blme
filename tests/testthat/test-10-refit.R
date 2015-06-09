@@ -11,11 +11,11 @@ test_that("refit for blmer matches original, not lmer", {
   blmerRefit <- refit(fit)
   lmerRefit  <- getS3method("refit", "merMod")(fit)
   
-  expect_equal(fit@theta, blmerRefit@theta, tolerance = 1.0e-05)
-  expect_equal(fit@beta,  blmerRefit@beta,  tolerance = 1.0e-07)
+  expect_equal(fit@theta, blmerRefit@theta, tolerance = 1.0e-02)
+  expect_equal(fit@beta,  blmerRefit@beta,  tolerance = 1.0e-03)
   
-  expect_false(all(abs(fit@theta - lmerRefit@theta) <= 1.0e-05))
-  expect_false(all(abs(fit@beta  - lmerRefit@beta)  <= 1.0e-07))
+  expect_false(all(abs(fit@theta - lmerRefit@theta) <= 1.0e-02))
+  expect_false(all(abs(fit@beta  - lmerRefit@beta)  <= 1.0e-03))
 })
 
 test_that("refit for bglmer matches original, not glmer", {
