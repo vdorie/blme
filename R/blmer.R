@@ -562,15 +562,23 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   ## rr$setResp(oldresp)
   ## rr$setResp(newresp)
   lme4Namespace <- getNamespace("lme4")
+  lme4Version   <- packageVersion("lme4")
   glmerPwrssUpdate <- get("glmerPwrssUpdate", lme4Namespace)
   if (isGLMM(object)) {
     GQmat <- GHrule(nAGQ)
     if (nAGQ <= 1) {
-      glmerPwrssUpdate(pp,rr, control$tolPwrss, GQmat, maxit = maxit)
+      if (lme4Version <= "1.1-7")
+        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat)
+      else
+        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat, maxit = maxit)
     } else {
-      glmerPwrssUpdate(pp,rr, control$tolPwrss, GQmat, maxit = maxit,
-                       grpFac = object@flist[[1]])
+      if (lme4Version <= "1.1-7")
+        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat, grpFac = object@flist[[1]])
+      else
+        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat, maxit = maxit, grpFac = object@flist[[1]])
     }
+    
+    baseOffset <- object@resp$offset
   }
   ## .Call(glmerLaplace, pp$ptr(), rr$ptr(), nAGQ,
   ## control$tolPwrss, as.integer(30), verbose)
@@ -584,7 +592,7 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
 	 compDev     = dc$dims[["compDev"]],
 	 nAGQ        = nAGQ,
 	 lp0         = pp$linPred(1), ## object@resp$eta - baseOffset,
-	 baseOffset  = object@resp$offset,
+	 baseOffset  = baseOffset,
 	 pwrssUpdate = glmerPwrssUpdate,
 	 ## save GQmat in the object and use that instead of nAGQ
 	 GQmat       = GHrule(nAGQ),
