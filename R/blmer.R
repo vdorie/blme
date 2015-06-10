@@ -527,9 +527,9 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
     ## modFrame[, attr(terms(modFrame), "response")] <- newresp
   }
   
-  rr <- if(isLMM(object))
+  rr <- if (isLMM(object))
     mkRespMod(model.frame(object), REML = isREML(object))
-  else if(isGLMM(object)) {
+  else if (isGLMM(object)) {
     modelFrame <- model.frame(object) ## blme change
     if (lme4Version <= "1.1-6") modelFrame$mustart <- object@resp$mu
     mkRespMod(modelFrame, family = family(object))
@@ -537,10 +537,10 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
     stop("refit.bmerMod not working for nonlinear mixed models")
   
   if (!is.null(newresp)) {
-    if(family(object)$family == "binomial") {
+    if (family(object)$family == "binomial") {
       ## re-do conversion of two-column matrix and factor
       ##  responses to proportion/weights format
-      if (is.matrix(newresp) && ncol(newresp)==2) {
+      if (is.matrix(newresp) && ncol(newresp) == 2) {
         ntot <- rowSums(newresp)
         ## FIXME: test what happens for (0,0) rows
         newresp <- newresp[,1] / ntot
@@ -614,7 +614,7 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   
   ## blme changes
   ff <- makeRefitDevFun(list2env(devlist), nAGQ = nAGQ, verbose = verbose, maxit = maxit, object = object)
-  reTrms <- list(flist=object@flist, cnms = object@cnms, Gp=object@Gp, lower=object@lower)
+  reTrms <- list(flist = object@flist, cnms = object@cnms, Gp = object@Gp, lower = object@lower)
   if (isGLMM(object))
     ff <- updateBglmerDevfun(ff, reTrms, nAGQ)
   
@@ -627,18 +627,18 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   ## if (!is.na(nAGQ) && nAGQ > 0L) {
   ##    xst   <- c(xst, sqrt(diag(pp$unsc())))
   ##    x0    <- c(x0, unname(fixef(object)))
-  ##     lower <- c(lower, rep(-Inf, length(x0 ) -length(lower)))
+  ##     lower <- c(lower, rep(-Inf, length(x0) - length(lower)))
   ##}
   
   ## blme end
   
-  ## control <- c(control,list(xst = 0.2 * xst, xt = xst * 0.0001))
+  ## control <- c(control, list(xst = 0.2 * xst, xt = xst * 0.0001))
   ## FIX ME: allow use.last.params to be passed through
   calc.derivs <- !is.null(object@optinfo$derivs)
-  ## if(isGLMM(object)) {
-  ##     rho$resp$updateWts()
-  ##     rho$pp$updateDecomp()
-  ##     rho$lp0 <- rho$pp$linPred(1)
+  ## if (isGLMM(object)) {
+  ##   rho$resp$updateWts()
+  ##   rho$pp$updateDecomp()
+  ##   rho$lp0 <- rho$pp$linPred(1)
   ## }
   
   ## blme changes below
