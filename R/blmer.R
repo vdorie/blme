@@ -450,6 +450,9 @@ runOptimizerWithPrior <- function(regression, cov.prior = NULL,
 refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
                           maxit = 100L, ...)
 {
+  lme4Namespace <- getNamespace("lme4")
+  lme4Version   <- packageVersion("lme4")
+
   newControl <- NULL
   if (ll <- length(l... <- list(...)) > 0) {
     if ((ll == 1L) &&  (names(l...)[1] == "control")) {
@@ -526,9 +529,11 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   
   rr <- if(isLMM(object))
     mkRespMod(model.frame(object), REML = isREML(object))
-  else if(isGLMM(object))
-    mkRespMod(model.frame(object), family = family(object))
-  else
+  else if(isGLMM(object)) {
+    modelFrame <- model.frame(object) ## blme change
+    if (lme4Version <= "1.1-6") modelFrame$mustart <- object@resp$mu
+    mkRespMod(modelFrame, family = family(object))
+  } else
     stop("refit.bmerMod not working for nonlinear mixed models")
   
   if (!is.null(newresp)) {
@@ -561,8 +566,6 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   ## rr$setResp(newresp)
   ## rr$setResp(oldresp)
   ## rr$setResp(newresp)
-  lme4Namespace <- getNamespace("lme4")
-  lme4Version   <- packageVersion("lme4")
   glmerPwrssUpdate <- get("glmerPwrssUpdate", lme4Namespace)
   if (isGLMM(object)) {
     GQmat <- GHrule(nAGQ)
