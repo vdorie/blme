@@ -266,6 +266,18 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
     beta <- opt$par[-devFunEnv$dpars]
   }
   
+  if (!is.null(merMod@optinfo)) {
+    parLength <- devFunEnv$parInfo$theta$length + if (!isLMM) devFunEnv$parInfo$beta$length else 0
+    if (parLength != length(merMod@optinfo$val)) {
+      merMod@optinfo$val_full    <- merMod@optinfo$val
+      merMod@optinfo$derivs_full <- merMod@optinfo$derivs
+      
+      merMod@optinfo$val <- merMod@optinfo$val[parLength]
+      merMod@optinfo$derivs$gradient <- merMod@optinfo$derivs$gradient[parLength]
+      merMod@optinfo$derivs$Hessian <- merMod@optinfo$derivs$Hessian[parLength, parLength, drop = FALSE]
+    }
+  }
+      
   Lambda.ts <- getCovBlocks(merMod@pp$Lambdat, devFunEnv$ranefStructure)
   exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts, sigma)
 
