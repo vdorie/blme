@@ -1,7 +1,7 @@
 ## copyright note:
 ##   a lot of of this was copy/pasted from the lme4 package (http://cran.r-project.org/web/packages/lme4/index.html, GPL-2)
 ##   a lot of it was not
-## ideally, blme wouldn't have to recreate the functions with minor tweaks but we're just no there yet
+## ideally, blme wouldn't have to recreate the functions with minor tweaks but we're just not there yet
 
 ## for R-check
 wishart <- "ignored"
@@ -99,7 +99,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
 
   args <- list(rho = devFunEnv, opt = opt, reTrms = lmod$reTrms, fr = lmod$fr, mc = mcout)
   if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
-  result <- do.call(mkMerMod, args, TRUE, sys.frame(0))
+  result <- do.call(mkMerMod, args, TRUE)
   result <- repackageMerMod(result, opt, devFunEnv)
   
   return(result)
@@ -185,7 +185,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
     if (!is.null(formals(optimizeGlmer)$boundary.tol)) args$boundary.tol <- if (nAGQ == 0) control$boundary.tol else 0
     if (!is.null(formals(optimizeGlmer)[["..."]])) args$calc.derivs <- FALSE
     
-    opt <- do.call(optimizeGlmer, args, TRUE, sys.frame(0))
+    opt <- do.call(optimizeGlmer, args, TRUE)
   }
   
   if(nAGQ > 0L) {
@@ -210,7 +210,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
       args$use.last.params <- control$use.last.params
     }
     ## reoptimize deviance function over covariance parameters and fixed effects
-    opt <- do.call(optimizeGlmer, args, TRUE, sys.frame(0))
+    opt <- do.call(optimizeGlmer, args, TRUE)
   }
 
   lme4Namespace <- getNamespace("lme4")
@@ -226,7 +226,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   ## prepare output
   args <- list(rho = environment(devfun), opt = opt, reTrms = glmod$reTrms, fr = glmod$fr, mc = mcout)
   if ("lme4conv" %in% names(formals(mkMerMod))) args$lme4conv <- cc
-  result <- do.call(mkMerMod, args, TRUE, sys.frame(0))
+  result <- do.call(mkMerMod, args, TRUE)
   result <- repackageMerMod(result, opt, environment(devfun))
   
   return(result)
@@ -675,7 +675,7 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
         args$calc.derivs <- calc.derivs
         args$use.last.params <- if (!is.null(control$use.last.params)) control$use.last.params else FALSE
       }
-      do.call(optimizeGlmer, args, TRUE, sys.frame(0))
+      do.call(optimizeGlmer, args, TRUE)
     }
   cc <- NULL
   if (exists("checkConv", lme4Namespace)) {

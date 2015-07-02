@@ -18,8 +18,13 @@ S3method(toString, bmerInvGammaDist)
 
 importFrom(methods, is, isGeneric, new, representation, show)
 importFrom(methods, setClass, setGeneric, setMethod)
-importFrom(stats, gaussian, vcov)
-importFrom(utils, data, getS3method)
+
+importFrom(stats, sd, vcov)
+importFrom(stats, gaussian, family)
+importFrom(stats, model.frame)
+importFrom(stats, getCall, setNames)
+
+importFrom(utils, data, getS3method, packageVersion)
 
 importClassesFrom(lme4, merMod, lmerMod, glmerMod)
 importFrom(lme4, lmer, glmer)
