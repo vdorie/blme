@@ -55,13 +55,17 @@
     To specify a prior in an absolute sense, set to \code{FALSE}. Argument
     is only applicable to linear mixed models.
 
-    \item \code{t(df = 3, scale = c(10^2, 2.5^2), common.scale = TRUE)}
+    \item \code{t(df = 3, mean = 0, scale = c(10^2, 2.5^2), common.scale = TRUE)}
     
-    The degrees of freedom - \code{df} argument - must be positive. If \code{scale} is
-    of length 1, it is repeated along the diagonal for every component. Length 2 repeats
-    just the second element for all slopes. Length equal to the number of fixed effects
-    sees the vector simply turned into a diagonal matrix. Finally, it can a full scale matrix,
-    so long as it is positive definite.
+    The degrees of freedom - \code{df} argument - must be positive. If \code{mean} is
+    of length 1, it is repeated for every fixed effect. Length 2 repeats just the second
+    element for all slopes. Otherwise, the length must be equal to that of the number of
+    fixed effects.
+    
+    If \code{scale} is of length 1, it is repeated along the diagonal for every
+    component. Length 2 repeats just the second element for all slopes. Length equal
+    to the number of fixed effects sees the vector simply turned into a diagonal matrix.
+    Finally, it can be a full scale matrix, so long as it is positive definite.
 
     \code{t} priors for linear mixed models require that the fixed effects be added to
     set of parameters that are numerically optimized, and thus can substantially
