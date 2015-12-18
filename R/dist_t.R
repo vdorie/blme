@@ -1,21 +1,32 @@
 setClass("bmerTDist",
          representation(df = "numeric",
+                        beta.0 = "numeric",
                         R.scale.inv = "matrix"),
          contains = "bmerDist")
 
 toString.bmerTDist <- function(x, digits = getOption("digits"), ...) {
   scaleString <- ""
   scale <- crossprod(solve(x@R.scale.inv))
-  
-  if (nrow(scale) > 2) {
-    scaleString <- paste("scale = c(", toString(round(scale[1:4], digits)), ", ...)", sep = "")
-  } else if (nrow(scale) == 2) {
-    scaleString <- paste("scale = c(", toString(round(scale[1:4], digits)), ")", sep = "")
+    
+  meanString <- ""
+  beta.0 <- x@beta.0
+  if (length(beta.0) > 4) {
+    meanString <- paste0("mean = c(", toString(round(beta.0[seq_len(4)], digits)), ", ...)")
+  } else if (length(beta.0) == 1) {
+    meanString <- paste0("mean = ", toString(round(beta.0[1], digits)))
   } else {
-    scaleString <- paste("scale = ", toString(round(scale[1], digits)), sep = "")
+    meanString <- paste0("mean = c(", toString(round(beta.0[seq_len(4)], digits)), ")")
   }
   
-  paste("t(df = ", x@df, ", ", scaleString,
+  if (nrow(scale) > 2) {
+    scaleString <- paste0("scale = c(", toString(round(scale[seq_len(4)], digits)), ", ...)")
+  } else if (nrow(scale) == 2) {
+    scaleString <- paste0("scale = c(", toString(round(scale[seq_len(4)], digits)), ")")
+  } else {
+    scaleString <- paste0("scale = ", toString(round(scale[1], digits)))
+  }
+    
+  paste("t(df = ", x@df, ", ", meanString, ", ", scaleString,
         ", common.scale = ", x@commonScale,
         ")", sep="")
 }
@@ -36,11 +47,12 @@ setMethod("getConstantTerm", "bmerTDist",
 )
 setMethod("getExponentialTerm", "bmerTDist",
   function(object, beta) {
+    beta.0 <- object@beta.0
     R.scale.inv <- object@R.scale.inv
     d <- nrow(R.scale.inv)
     df <- object@df
 
-    dist <- tcrossprod(crossprod(beta, R.scale.inv))[1]
+    dist <- tcrossprod(crossprod(beta - beta.0, R.scale.inv))[1]
     
     exponential <- (df + d) * log(1 + dist / df)
     c(0, exponential)

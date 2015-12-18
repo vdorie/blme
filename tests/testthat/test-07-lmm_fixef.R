@@ -29,7 +29,7 @@ test_that("blmer fits test data with normal(10, FALSE) prior, matching previous 
 })
   
 test_that("blmer fits test data with t prior, matching previous version", {
-  fixef.prior <- "t(3, c(10^2, 2.5^2), common.scale = FALSE)"
+  fixef.prior <- "t(3, scale = c(10^2, 2.5^2), common.scale = FALSE)"
   
   startingValues <- list(theta = c(0.645289664330177, -0.151604332140352, 1.39404761930357, 0.788435718441722, 0.312013729923666, -0.0155461916762167, 0.949082870229164, 0.117100582888698, 0),
                          beta = c(5.32508665168687, 1.16859904165051, 4.0443701271478))
@@ -40,6 +40,25 @@ test_that("blmer fits test data with t prior, matching previous version", {
                     cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
   expect_equal(fit@theta, result, tolerance = 5.0e-5)
   expect_equal(fit@beta, fixefResult, tolerance = 5.0e-5)
+})
+
+test_that("blmer fits test data with t prior, pulling coefs towards prior mean", {
+  fixef.prior <- "t(3, scale = c(10^2, 2.5^2), common.scale = FALSE)"
+  
+  startingValues <- list(theta = c(0.645289664330177, -0.151604332140352, 1.39404761930357, 0.788435718441722, 0.312013729923666, -0.0155461916762167, 0.949082870229164, 0.117100582888698, 0),
+                         beta = c(5.32508665168687, 1.16859904165051, 4.0443701271478))
+  fit1 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                testData, REML = FALSE, control = control, start = startingValues,
+                cov.prior = NULL, fixef.prior = fixef.prior)
+  
+  fixef.prior <- "t(3, mean = 1, scale = c(10^2, 2.5^2), common.scale = FALSE)"
+  startingValues <- list(theta = c(0.645231746255695, -0.150874294512127, 1.39279705168843, 0.788899237871713, 0.312993971411181, -0.0165781952291476, 0.9486901278038, 0.116610548693423, 0),
+                         beta = c(5.32921718654553, 1.254377710572, 4.0471360557054))
+  fit2 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                testData, REML = FALSE, control = control, start = startingValues,
+                cov.prior = NULL, fixef.prior = fixef.prior)
+  
+  expect_true(all(fit2@beta > fit1@beta))
 })
 
 test_that("blmer fits sleep study example in documentation", {

@@ -65,14 +65,23 @@ lmmDistributions <- list(
     
     new("bmerNormalDist", commonScale = common.scale, R.cov.inv = solve(chol(cov)))
   },
-  t = function(df = 3, scale = c(10^2, 2.5^2), common.scale = TRUE) {
+  t = function(df = 3, mean = 0, scale = c(10^2, 2.5^2), common.scale = TRUE) {
     matchedCall <- match.call()
     if (!is.null(matchedCall$df)) df <- eval(matchedCall$df)
+    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
     if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
 
     if (df <= 0) stop("t prior requires positive degrees of freedom")
-
+    
+    if (length(mean) == 1) {
+      mean <- rep_len(mean, p)
+    } else if (length(mean) == 2) {
+      mean <- c(mean[1], rep_len(mean[2], p - 1))
+    } else if (length(mean) != p) {
+      stop("t prior mean of improper length")
+    }
+    
     if (length(scale) == 1) {
       scale <- diag(scale, p)
     } else if (length(scale) == 2) {
@@ -82,14 +91,14 @@ lmmDistributions <- list(
     } else if (length(scale) != p^2) {
       stop("t prior scale of improper length")
     }
-
+    
     if (any(scale != base::t(scale))) stop("t scale not symmetric")
     
     logDet <- determinant(scale, TRUE)
     if (logDet$sign < 0 || is.infinite(logDet$modulus))
       stop("t prior scale negative semi-definite")
     
-    new("bmerTDist", commonScale = common.scale, df = df, R.scale.inv = solve(chol(scale)))
+    new("bmerTDist", commonScale = common.scale, df = df, beta.0 = mean, R.scale.inv = solve(chol(scale)))
   },
   gamma = function(shape = 2.5, rate = 0, common.scale = TRUE, posterior.scale = "sd") {
     matchedCall <- match.call()
@@ -253,15 +262,16 @@ glmmDistributions <- list(
 
     normal(sd = sd, common.scale = FALSE)
   },
-  t = function(df = 3, scale = c(10^2, 2.5^2)) {
+  t = function(df = 3, mean = 0, scale = c(10^2, 2.5^2)) {
     t <- blme:::lmmDistributions$t
     environment(t) <- environment()
         
     matchedCall <- match.call()
     if (!is.null(matchedCall$df)) df <- eval(matchedCall$df)
+    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
     if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
     
-    t(df = df, scale = scale, common.scale = FALSE)
+    t(df = df, mean = mean, scale = scale, common.scale = FALSE)
   },
   gamma = function(shape = 2.5, rate = 0, posterior.scale = "sd") {
     gamma <- blme:::lmmDistributions$gamma
