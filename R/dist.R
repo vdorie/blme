@@ -95,10 +95,20 @@ lmmDistributions <- list(
     if (any(scale != base::t(scale))) stop("t scale not symmetric")
     
     logDet <- determinant(scale, TRUE)
-    if (logDet$sign < 0 || is.infinite(logDet$modulus))
+    if (logDet$sign < 0)
       stop("t prior scale negative semi-definite")
+    if (is.infinite(logDet$modulus)) {
+      if (any(scale[upper.tri(scale) | lower.tri(scale)] != 0))
+        stop("t prior scale infinite")
+      ## special case for diagonal scale matrices with infinite variances
+      R.scale.inv <- diag(1 / sqrt(diag(scale)))
+      d <- sum(is.finite(diag(scale)))
+    } else {
+      R.scale.inv <- solve(chol(scale))
+      d <- nrow(R.scale.inv)
+    }
     
-    new("bmerTDist", commonScale = common.scale, df = df, beta.0 = mean, R.scale.inv = solve(chol(scale)))
+    new("bmerTDist", commonScale = common.scale, df = df, beta.0 = mean, d = d, R.scale.inv = R.scale.inv)
   },
   gamma = function(shape = 2.5, rate = 0, common.scale = TRUE, posterior.scale = "sd") {
     matchedCall <- match.call()
