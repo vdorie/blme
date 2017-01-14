@@ -11,7 +11,7 @@ test_that("blmer fits test data with normal(7, TRUE) prior, matching previous ve
   result <- if (lme4Version < "1.1-4") c(0.714336904883696, -0.242233333549434, 1.56142849039447, 0.931702729108028, 0.456177204451304, -0.174861811614276, 1.05852821195682, 0.121071547240353, 0.215801842870277) else c(0.714336904883696, -0.242233333549434, 1.56142849039447, 0.931702729108028, 0.456177204451304, -0.174861811614276, 1.05852821195682, 0.121071547240353, 0.215801842870277)
   
   fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, control = control,
-                    cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
+               cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
   expect_equal(fit@theta, result, tolerance = 5.0e-5)
 })
 
@@ -23,7 +23,7 @@ test_that("blmer fits test data with normal(10, FALSE) prior, matching previous 
   result <- if (lme4Version < "1.1-4") c(0.705369855182081, -0.236759905121764, 1.54063251814471, 0.919250008248663, 0.444836570608055, -0.162132239807962, 1.04497528986881, 0.121858574203024, 0.204725931113902) else c(0.705369855182081, -0.236759905121764, 1.54063251814471, 0.919250008248663, 0.444836570608055, -0.162132239807962, 1.04497528986881, 0.121858574203024, 0.204725931113902)
   
   fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, control = control,
-                    cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
+               cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
   expect_equal(fit@theta, result, tolerance = 5.0e-5)
   expect_equal(fit@devcomp$cmp[["sigmaREML"]], if (lme4Version < "1.1-4") 0.969074276597577 else 0.969074276597577, tolerance = 1.0e-6)
 })
@@ -37,7 +37,7 @@ test_that("blmer fits test data with t prior, matching previous version", {
   fixefResult <- if (lme4Version < "1.1-4") c(5.32507818836626, 1.16860398465568, 4.04437041491386) else c(5.32507818836626, 1.16860398465568, 4.04437041491386)
   
   fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2), testData, REML = FALSE, control = control,
-                    cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
+               cov.prior = NULL, fixef.prior = fixef.prior, start = startingValues)
   expect_equal(fit@theta, result, tolerance = 5.0e-5)
   expect_equal(fit@beta, fixefResult, tolerance = 5.0e-5)
 })
@@ -80,6 +80,19 @@ test_that("blme fits test data with t prior, infinite variances", {
   expect_true(abs(fit2@beta[2L]) > abs(fit1@beta[2L]))
 })
 
+test_that("blme fits test data with horseshoe prior, shrinking coefficients close to 0", {
+  fixef.prior <- "horseshoe(mean = 0, global.shrinkage = 1, common.scale = FALSE)"
+  
+  startingValues <- list(theta = c(0.617639687575409, -0.294806814471362, 1.35499090773928, 0.807122870503614, 0.452878790469015, 0.00511880816241064, 1.01339081390872, 0.138288121619745, 5.27691279774817e-05),
+                         beta = c(5.15394746118033, 6.90112633576194e-08, 3.98496350360682))
+  
+  suppressWarnings(fit1 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                                 testData, REML = FALSE, control = control, start = startingValues,
+                                 cov.prior = NULL, fixef.prior = fixef.prior))
+  
+  expect_true(max(abs(fit1@beta)) / min(abs(fit1@beta)) > 1.0e7)
+})
+
 test_that("blmer fits sleep study example in documentation", {
   oldWarnings <- options()$warn
   options(warn = 2)
@@ -98,3 +111,4 @@ test_that("blmer fits sleep study example in documentation", {
   
   options(warn = oldWarnings)
 })
+

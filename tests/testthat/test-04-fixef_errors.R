@@ -21,6 +21,12 @@ test_that("fixef.prior argument raises appropriate errors for blmer fits", {
                cov.prior = NULL, fixef.prior = NULL, resid.prior = NULL)
   expect_error(parsePrior(fit, fixef.prior = "t(df = 0)"))
   expect_error(parsePrior(fit, fixef.prior = "t(scale = c(-1, 2))"))
+  expect_error(parsePrior(fit, fixef.prior = "horseshoe(global.shrinkage = -1)"))
+  
+  expect_error(blmer(y ~ x.1 + (1 | g.1), testData, REML = TRUE,
+               cov.prior = NULL, fixef.prior = t, resid.prior = NULL))
+  expect_error(blmer(y ~ x.1 + (1 | g.1), testData, REML = TRUE,
+               cov.prior = NULL, fixef.prior = horseshoe(), resid.prior = NULL))
 })
 
 test_that("fixef.prior argument raises appropriate errors for bglmer fits", {
@@ -33,4 +39,5 @@ test_that("fixef.prior argument raises appropriate errors for bglmer fits", {
   
   expect_error(parsePrior(bglmerFit, fixef.prior = normal(common.scale = TRUE)))
   expect_error(parsePrior(bglmerFit, fixef.prior = t(common.scale = TRUE)))
+  expect_error(parsePrior(bglmerFit, fixef.prior = horseshoe(common.scale = TRUE)))
 })

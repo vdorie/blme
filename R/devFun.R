@@ -230,15 +230,15 @@ calculatePriorExponentialTerms <- function(priors, beta, Lambda.ts, sigma = NULL
   residPrior <- priors$residPrior
 
   if (!is.null(fixefPrior)) {
-    if (is(fixefPrior, "bmerTDist") && fixefPrior@commonScale == TRUE) {
-      term <- getExponentialTerm(fixefPrior, beta / sigma)
+    if ((is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerHorseshoeDist")) && fixefPrior@commonScale == TRUE) {
+      term <- getExponentialTerm(fixefPrior, beta, sigma)
     } else {
       term <- getExponentialTerm(fixefPrior, beta)
     }
-    result[[toString(term[1])]] <- term[2]
+    result[[toString(term[1L])]] <- term[2L]
   }
 
-  for (i in 1:length(covPriors)) {
+  for (i in seq_along(covPriors)) {
     if (is.null(covPriors[[i]])) next
     covPrior.i <- covPriors[[i]]
 
@@ -247,8 +247,8 @@ calculatePriorExponentialTerms <- function(priors, beta, Lambda.ts, sigma = NULL
     } else {
       term <- getExponentialTerm(covPrior.i, Lambda.ts[[i]])
     }
-    power <- toString(term[1])
-    exponential <- term[2]
+    power <- toString(term[1L])
+    exponential <- term[2L]
     if (is.null(result[[power]])) result[[power]] <- exponential
     else result[[power]] <- result[[power]] + exponential
   }
@@ -256,8 +256,8 @@ calculatePriorExponentialTerms <- function(priors, beta, Lambda.ts, sigma = NULL
   if (is.null(residPrior)) return(result)
   
   term <- getExponentialTerm(residPrior)
-  power <- toString(term[1])
-  exponential <- term[2]
+  power <- toString(term[1L])
+  exponential <- term[2L]
   if (is.null(result[[power]])) result[[power]] <- exponential
   else result[[power]] <- result[[power]] + exponential
 
@@ -266,13 +266,13 @@ calculatePriorExponentialTerms <- function(priors, beta, Lambda.ts, sigma = NULL
 
 calculatePriorPolynomialTerm <- function(covPriors, Lambda.ts)
 {
-  sum(sapply(1:length(covPriors), function(i)
+  sum(sapply(seq_along(covPriors), function(i)
       if (!is.null(covPriors[[i]])) getPolynomialTerm(covPriors[[i]], Lambda.ts[[i]]) else 0))
 }
 
 calculateFixefExponentialTerm <- function(beta, beta.tilde, RX, exponentialTerms = NULL)
 {
-  exponential <- crossprod(RX %*% (beta - beta.tilde))[1]
+  exponential <- crossprod(RX %*% (beta - beta.tilde))[1L]
   if (is.null(exponentialTerms)) return(exponential)
   
   if (is.null(exponentialTerms[["-2"]])) {

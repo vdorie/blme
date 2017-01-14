@@ -28,18 +28,17 @@ toString.bmerTDist <- function(x, digits = getOption("digits"), ...) {
       scaleString <- paste0("diag(scale) = c(", toString(round(scale, digits)), ")")
     }
   } else {
-    if (nrow(scale) > 2) {
-      scaleString <- paste0("scale = c(", toString(round(scale[seq_len(4)], digits)), ", ...)")
-    } else if (nrow(scale) == 2) {
-      scaleString <- paste0("scale = c(", toString(round(scale[seq_len(4)], digits)), ")")
+    if (nrow(scale) > 2L) {
+      scaleString <- paste0("scale = c(", toString(round(scale[seq_len(4L)], digits)), ", ...)")
+    } else if (nrow(scale) == 2L) {
+      scaleString <- paste0("scale = c(", toString(round(scale[seq_len(4L)], digits)), ")")
     } else {
-      scaleString <- paste0("scale = ", toString(round(scale[1], digits)))
+      scaleString <- paste0("scale = ", toString(round(scale[1L], digits)))
     }
   }
     
-  paste("t(df = ", x@df, ", ", meanString, ", ", scaleString,
-        ", common.scale = ", x@commonScale,
-        ")", sep="")
+  paste0("t(df = ", x@df, ", ", meanString, ", ", scaleString, ", ",
+        "common.scale = ", x@commonScale, ")")
 }
 setMethod("getDFAdjustment", "bmerTDist",
   function(object) {
@@ -52,21 +51,22 @@ setMethod("getConstantTerm", "bmerTDist",
     d <- object@d
     df <- object@df
     
-    det <- sum(log(if (d != nrow(R.scale.inv)) { p <- diag(R.scale.inv); p[p > 0] } else diag(R.scale.inv)))
+    ldet <- sum(log(if (d != nrow(R.scale.inv)) { p <- diag(R.scale.inv); p[p > 0] } else diag(R.scale.inv)))
     
     -2.0 * lgamma(0.5 * (df + d)) + 2.0 * lgamma(0.5 * df) +
-      d * (log(df) + log(pi)) - 2.0 * det
+      d * (log(df) + log(pi)) - 2.0 * ldet
   }
 )
 setMethod("getExponentialTerm", "bmerTDist",
-  function(object, beta) {
+  function(object, beta, sigma) {
     beta.0 <- object@beta.0
     R.scale.inv <- object@R.scale.inv
     d <- object@d
     df <- object@df
 
     dist <- tcrossprod(crossprod(beta - beta.0, R.scale.inv))[1L]
-    if (any(is.na(dist)) || any(is.infinite(dist))) browser()
+    if (!missing(sigma)) dist <- dist / sigma^2
+    if (any(is.na(dist)) || any(is.infinite(dist))) stop("non-finite or NA result in t-prior")
     
     exponential <- (df + d) * log(1 + dist / df)
     c(0, exponential)

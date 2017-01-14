@@ -1,19 +1,20 @@
 evaluateFixefPrior <- function(fixefPrior, defnEnv, evalEnv) {
-  if (is.character(fixefPrior)) fixefPrior <- parse(text = fixefPrior)[[1]]
+  if (is.character(fixefPrior)) fixefPrior <- parse(text = fixefPrior)[[1L]]
   
   if (is.symbol(fixefPrior) && exists(toString(fixefPrior), envir = evalEnv) &&
       !(as.character(fixefPrior) %in% fixefDistributions)) {
     fixefPrior <- get(toString(fixefPrior), envir = evalEnv)
-    if (is.character(fixefPrior)) fixefPrior <- parse(text = fixefPrior)[[1]]
+    if (is.character(fixefPrior)) fixefPrior <- parse(text = fixefPrior)[[1L]]
   }
   
   if (!is.null(fixefPrior)) {
     if (is.symbol(fixefPrior)) fixefPrior <- call(as.character(fixefPrior))
-    fixefDistributionName <- as.character(fixefPrior[[1]])
+    fixefDistributionName <- as.character(fixefPrior[[1L]])
     if (!(fixefDistributionName %in% fixefDistributions)) stop("unrecognized fixef distribution: '", fixefDistributionName, "'")
 
     return(eval(fixefPrior, envir = evalEnv))
   }
+  
   NULL
 }
 
@@ -28,14 +29,14 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
   if (is.character(covPriors)) {
     covPriors <- gsub("inverse.wishart", "invwishart", covPriors)
     covPriors <- gsub("inverse.gamma", "invgamma", covPriors)
-    covPriors <- parse(text = covPriors)[[1]]
+    covPriors <- parse(text = covPriors)[[1L]]
   }
   
-  if (is.call(covPriors) && covPriors[[1]] == "list") covPriors[[1]] <- NULL
+  if (is.call(covPriors) && covPriors[[1L]] == "list") covPriors[[1L]] <- NULL
   
   if (!is.list(covPriors)) covPriors <- list(covPriors)
 
-  for (i in 1:length(covPriors)) {
+  for (i in seq_along(covPriors)) {
     covPrior.i <- covPriors[[i]]
     ## can't just let 'em re-define "wishart", or use the built-in gamma
     if (is.symbol(covPrior.i) && exists(toString(covPrior.i), envir = evalEnv) &&
@@ -45,7 +46,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
       covPriors[[i]] <- covPrior.i
     }
   }
-  for (i in 1:length(covPriors)) {
+  for (i in seq_along(covPriors)) {
     covPrior.i <- covPriors[[i]]
     if (is.character(covPrior.i)) {
       covPrior.i <- gsub("inverse.wishart", "invwishart", covPrior.i)
@@ -57,17 +58,17 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
     if (is.symbol(covPrior.i)) covPrior.i <- call(as.character(covPrior.i))
     
     if (is.formula(covPrior.i)) {
-      factorName <- as.character(covPrior.i[[2]])
+      factorName <- as.character(covPrior.i[[2L]])
 
       if (!(factorName %in% factorNames))
         stop("grouping factor '", factorName, "' for covariance prior not in model formula")
       
       ## turn 'group ~ wishart' into 'group ~ wishart()'
-      if (is.symbol(covPrior.i[[3]])) covPrior.i[[3]] <- call(as.character(covPrior.i[[3]]))
+      if (is.symbol(covPrior.i[[3L]])) covPrior.i[[3L]] <- call(as.character(covPrior.i[[3L]]))
 
       ## for each grouping factor with the given name, store function call for later
       matchingFactors <- which(factorName == factorNames)
-      for (j in 1:length(matchingFactors)) result[[matchingFactors[j]]] <- covPrior.i[[3]]
+      for (j in seq_along(matchingFactors)) result[[matchingFactors[j]]] <- covPrior.i[[3L]]
       
     } else {
       ## default
@@ -76,13 +77,13 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
     }
   }
   
-  for (i in 1:numFactors) {
+  for (i in seq_len(numFactors)) {
     if (is.null(result[[i]]) && is.null(defaultCovPrior)) next
 
     result.i <- result[[i]]
     if (is.null(result[[i]]) && !is.null(defaultCovPrior)) result.i <- defaultCovPrior
 
-    covDistributionName <- as.character(result.i[[1]])
+    covDistributionName <- as.character(result.i[[1L]])
     if (!(covDistributionName %in% covDistributions)) stop("unrecognized ranef covariance distribution: '", covDistributionName, "'")
 
     defnEnv$q.k <- defnEnv$level.dim <- length(factorColumnNames[[i]])
@@ -99,7 +100,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
 evaluateResidualPrior <- function(residPrior, defnEnv, evalEnv) {
   if (is.character(residPrior)) {
     residPrior <- gsub("inverse.gamma", "invgamma", residPrior)
-    residPrior <- parse(text = residPrior)[[1]]
+    residPrior <- parse(text = residPrior)[[1L]]
   }
 
   if (is.symbol(residPrior) && exists(toString(residPrior), envir = evalEnv)) {
@@ -109,7 +110,7 @@ evaluateResidualPrior <- function(residPrior, defnEnv, evalEnv) {
   
   if (!is.null(residPrior)) {
     if (is.symbol(residPrior)) residPrior <- call(as.character(residPrior))
-    residDistributionName <- as.character(residPrior[[1]])
+    residDistributionName <- as.character(residPrior[[1L]])
     if (!(residDistributionName %in% residDistributions)) stop("unrecognized residual variance distribution: '", residDistributionName, "'")
 
     return(eval(residPrior, envir = evalEnv))
@@ -127,7 +128,7 @@ evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
   defnEnv$p <- defnEnv$n.fixef <- dims[["p"]]
   defnEnv$n <- defnEnv$n.obs   <- dims[["n"]]
 
-  isLMM <- dims[["GLMM"]] == 0
+  isLMM <- dims[["GLMM"]] == 0L
   
   ## add the names of dist functs to the evaluating env
   for (distributionName in names(lmmDistributions)) {
@@ -143,8 +144,8 @@ evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
   }
   
   result$fixefPrior <- evaluateFixefPrior(fixefPrior, defnEnv, evalEnv)
-  if (is(result$fixefPrior, "bmerTDist") && isLMM && dims[["REML"]] > 0L)
-    stop("t distribution for fixed effects only supported when REML = FALSE")
+  if ((is(result$fixefPrior, "bmerTDist") || is(result$fixefPrior, "bmerHorseshoeDist")) && isLMM && dims[["REML"]] > 0L)
+    stop("t/horseshoe distribution for fixed effects only supported when REML = FALSE")
   result$covPriors  <- evaluateCovPriors(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv)
 
   if (isLMM) {

@@ -237,7 +237,7 @@ lmmObjective <- function(pp, resp, sigma, exponentialTerms, polynomialTerm, blme
   result <- resp$objective(pp$ldL2(), pp$ldRX2(), pp$sqrL(1.0), sigma.sq)
 
   exponentialTerm <- 0
-  for (i in 1:length(exponentialTerms)) {
+  for (i in seq_along(exponentialTerms)) {
     power <- as.numeric(names(exponentialTerms)[[i]])
     value <- exponentialTerms[[i]]
     if (!is.finite(value)) return(value)
@@ -283,6 +283,8 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
 
   if (isLMM) {
     if (blmerControl$fixefOptimizationType == FIXEF_OPTIM_NUMERIC) {
+      ## when beta can't be profiled, a term is added that is a weighted distance of the numeric optimum
+      ## and a least-squares solution (what the merMod calculates)
       fixefExponentialTerm <- calculateFixefExponentialTerm(beta, merMod@pp$beta(1.0), merMod@pp$RX())
       if (is.null(exponentialTerms[["-2"]])) {
         exponentialTerms[["-2"]] <- fixefExponentialTerm

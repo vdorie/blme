@@ -40,7 +40,7 @@ createBlmerControl <- function(pred, resp, priors)
   df <- df + getDFAdjustment(priors$fixefPrior) + getResidPriorDFAdjustment(priors$residPrior)
   constant <- constant + getConstantTerm(priors$fixefPrior) + getConstantTerm(priors$residPrior)
 
-  for (i in 1:numFactors) {
+  for (i in seq_len(numFactors)) {
     df <- df + getDFAdjustment(priors$covPrior[[i]])
     constant <- constant + getConstantTerm(priors$covPrior[[i]])
   }
@@ -62,7 +62,7 @@ getFixefOptimizationType <- function(pred, resp, priors)
   
   fixefPrior <- priors$fixefPrior
   
-  if (is(fixefPrior, "bmerTDist")) return(FIXEF_OPTIM_NUMERIC)
+  if (is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerHorseshoeDist")) return(FIXEF_OPTIM_NUMERIC)
 
   FIXEF_OPTIM_LINEAR
 }
@@ -88,11 +88,11 @@ getSigmaOptimizationType <- function(resp, priors)
   
   if (is(fixefPrior, "bmerNormalDist") && fixefPrior@commonScale == FALSE)
     return(SIGMA_OPTIM_NUMERIC)
-  if (is(fixefPrior, "bmerTDist") && fixefPrior@commonScale == TRUE)
+  if ((is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerHorseshoeDist")) && fixefPrior@commonScale == TRUE)
     return(SIGMA_OPTIM_NUMERIC)
   
   exponentialTerms <- c()
-  for (i in 1:length(covPriors)) {
+  for (i in seq_along(covPriors)) {
     covPrior.i <- covPriors[[i]]
 
     if (is(covPrior.i, "bmerCustomDist") && covPrior.i@commonScale == FALSE) return(SIGMA_OPTIM_NUMERIC)

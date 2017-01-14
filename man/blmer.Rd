@@ -29,7 +29,7 @@ bglmer(formula, data, family = gaussian,
     \code{invgamma}, or \code{NULL}. Imposes a prior over the covariance of the random
     effects/modeled coefficients. Default is \code{wishart}. The \code{NULL} argument
     imposes flat priors over all relevant parameters.}
-  \item{fixef.prior}{a BLME prior of family \code{normal}, \code{t}, or \code{NULL}.
+  \item{fixef.prior}{a BLME prior of family \code{normal}, \code{t}, \code{horseshoe}, or \code{NULL}.
     Imposes a prior over the fixed effects/modeled coefficients.
     Default is \code{NULL}.}
   \item{resid.prior}{a BLME prior of family \code{gamma}, \code{invamma}, \code{point}
@@ -101,8 +101,8 @@ bglmer(formula, data, family = gaussian,
 \itemize{\item \code{fixef.prior = multivariate.distribution(options1 = value1, \dots)}}
   
   At present, the implemented multivariate distributions are \code{normal}, \code{t},
-  and \code{NULL}. \code{t} priors cannot be used when \code{REML} is \code{TRUE},
-  as that integral does not have a closed form solution.
+  \code{horseshoe}, and \code{NULL}. \code{t} and \code{horseshoe} priors cannot be used
+  when \code{REML} is \code{TRUE}, as that integral does not have a closed form solution.
 
   \strong{Residual Variance Prior}
 

@@ -9,7 +9,7 @@ if (!isGeneric("getConstantTerm"))
 if (!isGeneric("getExponentialSigmaPower"))
   setGeneric("getExponentialSigmaPower", function(object, ...) standardGeneric("getExponentialSigmaPower"))
 ## whatever is going on in the exponent, and what power sigma has connected with it
-## note, relative to 1 / 2
+## note, relative to -1 / 2
 if (!isGeneric("getExponentialTerm"))
   setGeneric("getExponentialTerm", function(object, ...) standardGeneric("getExponentialTerm"))
 if (!isGeneric("getPolynomialTerm"))
@@ -22,7 +22,7 @@ setMethod("getExponentialTerm", "ANY", function(object, ...) c(0, 0))
 setMethod("getPolynomialTerm", "ANY", function(object, ...) 0)
           
 
-fixefDistributions <- c("flat", "normal", "t")
+fixefDistributions <- c("flat", "normal", "t", "horseshoe")
 covDistributions   <- c("flat", "wishart", "invwishart",
                         "gamma", "invgamma", "custom")
 residDistributions <- c("flat", "gamma", "invgamma", "point")
@@ -39,12 +39,14 @@ lmmDistributions <- list(
 
     if (missing(cov) && !is.null(sd)) {
       sd <- sd^2
-      if (length(sd) == 1) {
+      if (length(sd) == 1L) {
         cov <- diag(sd, p)
-      } else if (length(sd) == 2) {
-        cov <- diag(sd[c(1, rep(2, p - 1))], p)
+      } else if (length(sd) == 2L && p > 1L) {
+        cov <- diag(c(sd[1L], rep_len(sd[2L], p - 1L)), p)
       } else {
-        sd <- rep(sd, p %/% length(sd) + 1)[1:p]
+        if (length(sd) > p) warning("length of sd in normal prior exceeds number of fixed effects")
+        
+        sd <- rep_len(sd, p)
         cov <- diag(sd, p)
       }
     }
@@ -53,7 +55,7 @@ lmmDistributions <- list(
     }
     if (length(cov) == p) {
       cov <- diag(cov, p)
-    } else if (length(cov) != p^2) {
+    } else if (length(cov) != p * p) {
       stop("normal prior covariance of improper length")
     }
 
@@ -74,21 +76,21 @@ lmmDistributions <- list(
 
     if (df <= 0) stop("t prior requires positive degrees of freedom")
     
-    if (length(mean) == 1) {
+    if (length(mean) == 1L) {
       mean <- rep_len(mean, p)
-    } else if (length(mean) == 2) {
-      mean <- c(mean[1], rep_len(mean[2], p - 1))
+    } else if (length(mean) == 2L && p > 1L) {
+      mean <- c(mean[1L], rep_len(mean[2L], p - 1L))
     } else if (length(mean) != p) {
       stop("t prior mean of improper length")
     }
     
-    if (length(scale) == 1) {
+    if (length(scale) == 1L) {
       scale <- diag(scale, p)
-    } else if (length(scale) == 2) {
-      scale <- diag(scale[c(1, rep(2, p - 1))], p)
+    } else if (length(scale) == 2L && p > 1L) {
+      scale <- diag(c(scale[1L], rep_len(scale[2L], p - 1L)), p)
     } else if (length(scale) == p) {
       scale <- diag(scale, p)
-    } else if (length(scale) != p^2) {
+    } else if (length(scale) != p * p) {
       stop("t prior scale of improper length")
     }
     
@@ -110,19 +112,40 @@ lmmDistributions <- list(
     
     new("bmerTDist", commonScale = common.scale, df = df, beta.0 = mean, d = d, R.scale.inv = R.scale.inv)
   },
+  horseshoe = function(mean = 0, global.shrinkage = 2.5, common.scale = TRUE) {
+    matchedCall <- match.call()
+    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
+    if (!is.null(matchedCall$global.shrinkage)) global.shrinkage <- eval(matchedCall$global.shrinkage)
+    common.scale <- blme:::deparseCommonScale(common.scale)
+    
+    if (length(mean) == 1L) {
+      mean <- rep_len(mean, p)
+    } else if (length(mean) == 2L && p > 1L) {
+      mean <- c(mean[1L], rep_len(mean[2L], p - 1L))
+    } else if (length(mean) != p) {
+      stop("horseshoe prior mean of improper length")
+    }
+    
+    if (global.shrinkage <= 0)
+      stop("horseshoe prior global.shrinkage parameter must be positive")
+    if (length(global.shrinkage) != 1L)
+      stop("horseshoe prior global.shrinkage must be of length 1")
+    
+    new("bmerHorseshoeDist", beta.0 = mean, tau.sq = global.shrinkage^2, commonScale = common.scale)
+  },
   gamma = function(shape = 2.5, rate = 0, common.scale = TRUE, posterior.scale = "sd") {
     matchedCall <- match.call()
     if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
     if (!is.null(matchedCall$rate)) rate <- eval(matchedCall$rate)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
-    if (level.dim > 1) {
+    if (level.dim > 1L) {
       warning("gamma prior applied to multivariate grouping level will be ignored")
       return(NULL)
     }
 
-    if (shape < 0) stop("gamma requires a shape >= 0")
-    if (rate  < 0) stop("gamma requires a rate >= 0")
+    if (shape < 0) stop("gamma prior shape must be positive")
+    if (rate  < 0) stop("gamma prior rate must be positive")
 
     new("bmerGammaDist", commonScale = common.scale, shape = shape, rate = rate, posteriorScale = posterior.scale)
   },
@@ -132,13 +155,13 @@ lmmDistributions <- list(
     if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
-    if (level.dim > 1) {
+    if (level.dim > 1L) {
       warning("inverse gamma prior applied to multivariate grouping level will be ignored")
       return(NULL)
     }
 
-    if (shape < 0) stop("invgamma requires a shape >= 0")
-    if (scale < 0) stop("invgamma requires a scale >= 0")
+    if (shape < 0) stop("invgamma prior shape must be positive")
+    if (scale < 0) stop("invgamma prior scale must be positive")
     
     new("bmerInvGammaDist", commonScale = common.scale, shape = shape, scale = scale, posteriorScale = posterior.scale)
   },
@@ -148,22 +171,22 @@ lmmDistributions <- list(
     if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
-    if (df <= level.dim - 1)
+    if (df <= level.dim - 1L)
       stop("wishart dists for degrees of freedom less than or equal to (level.dim - 1) are singular or non-existent")
     
     log.det.scale <- NULL
-    if (length(scale) == 1) {
+    if (length(scale) == 1L) {
       if (is.infinite(scale)) {
         R.scale.inv <- diag(0, level.dim)
         log.det.scale <- Inf
       } else {
-        if (scale[1] < 0) stop("wishart prior scale negative definite")
-        R.scale.inv <- diag(1 / sqrt(scale[1]), level.dim)
+        if (scale[1L] < 0) stop("wishart prior scale negative definite")
+        R.scale.inv <- diag(1 / sqrt(scale[1L]), level.dim)
       }
     } else if (length(scale) == level.dim) {
       if (any(scale < 0)) stop("wishart prior scale negative definite")
       R.scale.inv <- diag(1 / sqrt(scale), level.dim)
-    } else if (length(scale) != level.dim^2) {
+    } else if (length(scale) != level.dim * level.dim) {
       stop("wishart prior scale of improper length")
     } else {
       if (all(is.infinite(scale))) {
@@ -192,22 +215,22 @@ lmmDistributions <- list(
     if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
 
-    if (df <= level.dim - 1)
+    if (df <= level.dim - 1L)
       stop("inverse wishart dists for degrees of freedom less than or equal to (level.dim - 1) are singular or non-existent")
 
     log.det.scale <- NULL
-    if (length(scale) == 1) {
+    if (length(scale) == 1L) {
       if (scale == 0) {
         R.scale <- diag(0, level.dim)
         log.det.scale <- -Inf
       } else {
-        if (scale[1] < 0) stop("inverse wishart prior scale negative definite")
-        R.scale <- diag(sqrt(scale[1]), level.dim)
+        if (scale[1L] < 0) stop("inverse wishart prior scale negative definite")
+        R.scale <- diag(sqrt(scale[1L]), level.dim)
       }
     } else if (length(scale) == level.dim) {
       if (any(scale < 0)) stop("inverse wishart prior scale negative definite")
       R.scale <- diag(sqrt(scale), level.dim)
-    } else if (length(scale) != level.dim^2) {
+    } else if (length(scale) != level.dim * level.dim) {
       stop("inverse wishart prior scale of improper length")
     } else {
       if (all(scale == 0)) {
@@ -283,6 +306,16 @@ glmmDistributions <- list(
     
     t(df = df, mean = mean, scale = scale, common.scale = FALSE)
   },
+  horseshoe = function(mean = 0, global.shrinkage = 2.5) {
+    horseshoe <- blme:::lmmDistributions$horseshoe
+    environment(horseshoe) <- environment()
+        
+    matchedCall <- match.call()
+    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
+    if (!is.null(matchedCall$global.shrinkage)) scale <- eval(matchedCall$global.shrinkage)
+    
+    horseshoe(mean = mean, global.shrinkage = global.shrinkage)
+  },
   gamma = function(shape = 2.5, rate = 0, posterior.scale = "sd") {
     gamma <- blme:::lmmDistributions$gamma
     environment(gamma) <- environment()
@@ -316,8 +349,8 @@ residualVarianceGammaPrior <- function(shape = 0, rate = 0, posterior.scale = "v
   if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
   if (!is.null(matchedCall$rate)) rate <- eval(matchedCall$rate)
 
-  if (shape < 0) stop("gamma requires a shape >= 0")
-  if (rate  < 0) stop("gamma requires a rate >= 0")
+  if (shape < 0) stop("gamma prior shape must be positive")
+  if (rate  < 0) stop("gamma prior rate must be positive")
   
   new("bmerGammaDist", commonScale = FALSE, shape = shape, rate = rate, posteriorScale = posterior.scale)
 }
@@ -327,8 +360,8 @@ residualVarianceInvGammaPrior <- function(shape = 0, scale = 0, posterior.scale 
   if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
   if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
 
-  if (shape < 0) stop("invgamma requires a shape >= 0")
-  if (scale < 0) stop("invgamma requires a scale >= 0")
+  if (shape < 0) stop("invgamma prior shape must be positive")
+  if (scale < 0) stop("invgamma prior scale must be positive")
   
   new("bmerInvGammaDist", commonScale = FALSE, shape = shape, scale = scale, posteriorScale = posterior.scale)
 }
@@ -341,7 +374,7 @@ deparseCommonScale <- function(common.scale) {
   if (is.character(common.scale)) {
     if (common.scale == "TRUE" || common.scale == "true") return(TRUE)
     if (common.scale == "FALSE" || common.scale == "false") return(FALSE)
-    return(eval(parse(text = common.scale)[[1]]))
+    return(eval(parse(text = common.scale)[[1L]]))
   }
 
   common.scale

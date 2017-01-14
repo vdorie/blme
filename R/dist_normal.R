@@ -10,19 +10,18 @@ toString.bmerNormalDist <- function(x, digits = getOption("digits"), ...) {
   sds <- round(sds, digits)
   corrs <- round(corrs[lower.tri(corrs)], digits)
   
-  if (nrow(cov) > 2) {
-    covString <- paste("sd = c(", toString(round(sds[1:2], digits)),
-                       ", ...), corr = c(", toString(round(corrs[1], digits)), " ...)", sep = "")
-  } else if (nrow(cov) == 2) {
-    covString <- paste("sd = c(", toString(round(sds[1:2], digits)),
-                       "), corr = ", toString(round(corrs[1], digits)), sep = "")
+  if (nrow(cov) > 2L) {
+    covString <- paste0("sd = c(", round(sds[1L:2L], digits),
+                        ", ...), corr = c(", round(corrs[1L], digits), " ...)")
+  } else if (nrow(cov) == 2L) {
+    covString <- paste0("sd = c(", round(sds[1L:2L], digits),
+                        "), corr = ", round(corrs[1L], digits))
   } else {
-    covString <- paste("sd = ", toString(round(sds[1], digits)), sep = "")
+    covString <- paste0("sd = ", round(sds[1L], digits))
   }
   
-  paste("normal(", covString,
-        ", common.scale = ", x@commonScale,
-        ")", sep="")
+  paste0("normal(", covString, ", ",
+        "common.scale = ", x@commonScale, ")")
 }
 
 setMethod("getDFAdjustment", "bmerNormalDist",

@@ -75,6 +75,8 @@
 
     At present, \code{t} priors cannot be used with the \code{REML = TRUE} argument
     as that implies an integral without a closed form solution.
+
+    \item \code{horseshoe(mean = 0, global.shrinkage = 1, common.scale = TRUE)}
   }
 
   \strong{Covariance Priors}

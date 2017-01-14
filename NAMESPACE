@@ -10,6 +10,8 @@ S3method(vcov, summary.bmerMod)
 S3method(refit, bmerMod)
 
 S3method(toString, bmerNormalDist)
+S3method(toString, bmerTDist)
+S3method(toString, bmerHorseshoeDist)
 S3method(toString, bmerPointDist)
 S3method(toString, bmerWishartDist)
 S3method(toString, bmerInvWishartDist)
@@ -25,6 +27,8 @@ importFrom(stats, model.frame)
 importFrom(stats, getCall, setNames)
 
 importFrom(utils, data, getS3method, packageVersion)
+
+importFrom(expint, expint_E1)
 
 importClassesFrom(lme4, merMod, lmerMod, glmerMod)
 importFrom(lme4, lmer, glmer)
