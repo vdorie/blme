@@ -81,9 +81,10 @@
     The horseshoe shrinkage prior is implemented similarly to the \code{t} prior, in
     that it requires adding the fixed effects to the parameter set for numeric optimization.
     
-    \code{global.shrinkage}, also referred to as \eqn{\tau}, must be positive. Local
-    shrinkage parameters are treated as independent across all fixed effects and are
-    integrated out. See \cite{Carvalho} in the references.
+    \code{global.shrinkage}, also referred to as \eqn{\tau}, must be positive and
+    is on the scale of a standard deviation. Local shrinkage parameters are treated as
+    independent across all fixed effects and are integrated out. See
+    \cite{Carvalho et al. (2009)} in the references.
   }
 
   \strong{Covariance Priors}
