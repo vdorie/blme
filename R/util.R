@@ -29,3 +29,5 @@ is.formula <- function(term) is.language(term) && term[[1]] == '~'
 #  result[[3]] <- if (character.only) name else match.call()[[2]]
 #  result
 #}
+
+"%not_in%" <- function(x, table) match(x, table, nomatch = 0L) <= 0L

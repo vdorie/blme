@@ -31,14 +31,17 @@ setMethod("getConstantTerm", "bmerHorseshoeDist",
   }
 )
 setMethod("getExponentialTerm", "bmerHorseshoeDist",
-  function(object, beta, sigma) {
+  function(object, beta, sigma = NULL) {
     beta.0 <- object@beta.0
     tau.sq <- object@tau.sq
     
     dist <- 0.5 * (beta - beta.0)^2 / tau.sq
-    if (!missing(sigma)) dist <- dist / sigma^2
+    if (object@commonScale == TRUE && !is.null(sigma)) dist <- dist / sigma^2
     
-    result <- -2 * sum(log(sapply(dist, expint::expint_E1, scale = TRUE)))
+    temp <- suppressWarnings(sapply(dist, expint::expint_E1, scale = TRUE))
+    temp[is.nan(temp)] <- .Machine$double.xmax * .Machine$double.eps
+    
+    result <- -2 * sum(log(temp))
     
     c(0, result)
   }

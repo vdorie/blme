@@ -257,11 +257,14 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
 
   blmerControl <- devFunEnv$blmerControl
   priors <- devFunEnv$priors
-
+  
+  sigma <- NULL
   if (isLMM) {
     expandParsInCurrentFrame(opt$par, devFunEnv$parInfo)
     if (blmerControl$fixefOptimizationType != FIXEF_OPTIM_NUMERIC) beta <- merMod@pp$beta(1.0)
     else merMod@beta <- beta
+    
+    if (blmerControl$sigmaOptimizationType == SIGMA_OPTIM_POINT) sigma <- priors$residPrior@value
   } else {
     beta <- opt$par[-devFunEnv$dpars]
   }
@@ -277,7 +280,7 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
       merMod@optinfo$derivs$Hessian <- merMod@optinfo$derivs$Hessian[parLength, parLength, drop = FALSE]
     }
   }
-      
+  
   Lambda.ts <- getCovBlocks(merMod@pp$Lambdat, devFunEnv$ranefStructure)
   exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts, sigma)
 
@@ -298,9 +301,7 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
   
     ## recover sigma
     sigmaOptimizationType <- blmerControl$sigmaOptimizationType
-    if (sigmaOptimizationType == SIGMA_OPTIM_POINT) {
-      sigma <- priors$residPrior@value
-    } else if (sigmaOptimizationType != SIGMA_OPTIM_NUMERIC) {
+    if (sigmaOptimizationType %not_in% c(SIGMA_OPTIM_POINT, SIGMA_OPTIM_NUMERIC)) {
       profileSigma <- getSigmaProfiler(priors, blmerControl)
       sigma <- profileSigma(merMod@pp, merMod@resp, exponentialTerms, blmerControl)
     }

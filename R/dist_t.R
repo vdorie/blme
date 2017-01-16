@@ -58,14 +58,14 @@ setMethod("getConstantTerm", "bmerTDist",
   }
 )
 setMethod("getExponentialTerm", "bmerTDist",
-  function(object, beta, sigma) {
+  function(object, beta, sigma = NULL) {
     beta.0 <- object@beta.0
     R.scale.inv <- object@R.scale.inv
     d <- object@d
     df <- object@df
 
     dist <- tcrossprod(crossprod(beta - beta.0, R.scale.inv))[1L]
-    if (!missing(sigma)) dist <- dist / sigma^2
+    if (object@commonScale == TRUE && !is.null(sigma)) dist <- dist / sigma^2
     if (any(is.na(dist)) || any(is.infinite(dist))) stop("non-finite or NA result in t-prior")
     
     exponential <- (df + d) * log(1 + dist / df)

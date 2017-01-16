@@ -76,7 +76,14 @@
     At present, \code{t} priors cannot be used with the \code{REML = TRUE} argument
     as that implies an integral without a closed form solution.
 
-    \item \code{horseshoe(mean = 0, global.shrinkage = 1, common.scale = TRUE)}
+    \item \code{horseshoe(mean = 0, global.shrinkage = 2.5, common.scale = TRUE)}
+    
+    The horseshoe shrinkage prior is implemented similarly to the \code{t} prior, in
+    that it requires adding the fixed effects to the parameter set for numeric optimization.
+    
+    \code{global.shrinkage}, also referred to as \eqn{\tau}, must be positive. Local
+    shrinkage parameters are treated as independent across all fixed effects and are
+    integrated out. See \cite{Carvalho} in the references.
   }
 
   \strong{Covariance Priors}
@@ -153,6 +160,12 @@
   \describe{
     \item{toString}{Pretty-prints the distribution and its parameters.}
   }
+}
+
+\references{
+Carvalho, Carlos M., Nicholas G. Polson, and James G. Scott.
+  "Handling Sparsity via the Horseshoe."
+  AISTATS. Vol. 5. 2009.
 }
 
 \seealso{
