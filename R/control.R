@@ -106,9 +106,9 @@ getSigmaOptimizationType <- function(resp, priors)
   ## exp(-0.5 * sigma^-2 * stuff) always happens, so other terms are "extra"
   extraExponentialTerms <- setdiff(exponentialTerms, -2)
   
-  if (length(extraExponentialTerms) == 0) return(SIGMA_OPTIM_SQ_LINEAR)
+  if (length(extraExponentialTerms) == 0L) return(SIGMA_OPTIM_SQ_LINEAR)
   
-  if (length(extraExponentialTerms) > 1 || !(extraExponentialTerms %in% c(-1, 2)))
+  if (length(extraExponentialTerms) > 1L || !(extraExponentialTerms %in% c(-1, 2)))
     return(SIGMA_OPTIM_NUMERIC)
 
   if (extraExponentialTerms == -1) return(SIGMA_OPTIM_QUADRATIC)

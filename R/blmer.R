@@ -189,11 +189,16 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   }
   
   if(nAGQ > 0L) {
-    
-    start <- get("updateStart", getNamespace("lme4"))(start,theta=opt$par)
-    
     ## update deviance function to include fixed effects as inputs
     devfun <- updateBglmerDevfun(devfun, glmod$reTrms, nAGQ = nAGQ)
+    
+    if (control$nAGQ0initStep) {
+      start <- get("updateStart", getNamespace("lme4"))(start,theta=opt$par)
+      
+      ## if nAGQ0 was skipped
+      ## we don't actually need to do anything here, it seems --
+      ## getStart gets called again in optimizeGlmer ...
+    }
     
     if (devFunOnly) return(devfun)
     
@@ -301,7 +306,7 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
   
     ## recover sigma
     sigmaOptimizationType <- blmerControl$sigmaOptimizationType
-    if (sigmaOptimizationType %not_in% c(SIGMA_OPTIM_POINT, SIGMA_OPTIM_NUMERIC)) {
+    if (sigmaOptimizationType %not_in% c(SIGMA_OPTIM_NA, SIGMA_OPTIM_POINT, SIGMA_OPTIM_NUMERIC)) {
       profileSigma <- getSigmaProfiler(priors, blmerControl)
       sigma <- profileSigma(merMod@pp, merMod@resp, exponentialTerms, blmerControl)
     }
@@ -468,14 +473,14 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   lme4Namespace <- getNamespace("lme4")
   lme4Version   <- packageVersion("lme4")
 
+  dotsList <- list(...)
+  
   newControl <- NULL
-  if (ll <- length(l... <- list(...)) > 0) {
-    if ((ll == 1L) &&  (names(l...)[1] == "control")) {
-      newControl <- l...$control
-    } else {
-      warning("additional arguments to refit.bmerMod ignored")
-    }
-  }
+  if ("control" %in% names(dotsList)) newControl <- dotsList$control
+  
+  if (!all(names(dotsList) %in% c("control", "verbose")))
+    warning("additional arguments to refit.bmerMod ignored")
+  
   ## TODO: not clear whether we should reset the names
   ##       to the new response variable.  Maybe not.
   
@@ -504,11 +509,11 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   ## "three minutes' thought would suffice ..."
   ignore.pars <- c("xst", "xt")
   control.internal <- object@optinfo$control
-  if (length(ign <- which(names(control.internal) %in% ignore.pars)) > 0)
+  if (length(ign <- which(names(control.internal) %in% ignore.pars)) > 0L)
     control.internal <- control.internal[-ign]
   if (!is.null(newControl)) {
     control <- newControl
-    if (length(control$optCtrl) == 0)
+    if (length(control$optCtrl) == 0L)
        control$optCtrl <- control.internal
   } else {
     control <- if (isGLMM(object)) glmerControl() else lmerControl()
@@ -519,12 +524,12 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   dc        <- object@devcomp
   nAGQ      <- unname(dc$dims["nAGQ"]) # possibly NA # blme change
   nth       <- dc$dims[["nth"]]
-  verbose <- l...$verbose; if (is.null(verbose)) verbose <- 0L
+  verbose <- dotsList$verbose; if (is.null(verbose)) verbose <- 0L
   if (!is.null(newresp)) {
     ## update call and model frame with new response
     rcol <- attr(attr(model.frame(object), "terms"), "response")
     if (rename.response) {
-      attr(object@frame,"formula")[[2]] <- object@call$formula[[2]] <- newrespSub
+      attr(object@frame,"formula")[[2L]] <- object@call$formula[[2L]] <- newrespSub
       names(object@frame)[rcol] <- deparse(newrespSub)
     }
     if (!is.null(na.act <- attr(object@frame,"na.action")) &&

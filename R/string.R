@@ -1,17 +1,17 @@
 covariancePriorsToString <- function(covPriors, numGroupsPerFactor, digits)
 {
-  result <- character(0)
-  resultIndex <- 1
+  result <- character(0L)
+  resultIndex <- 1L
   
   numFactors <- length(numGroupsPerFactor)
   factorNames <- names(numGroupsPerFactor)
-  for (i in 1:numFactors) {
+  for (i in seq_len(numFactors)) {
     prior.i <- covPriors[[i]]
 
     if (is.null(prior.i)) next
 
     result[resultIndex] <- paste(factorNames[i], " ~ ", toString(prior.i, digits), sep = "")
-    resultIndex <- resultIndex + 1
+    resultIndex <- resultIndex + 1L
   }
 
   result
@@ -19,10 +19,10 @@ covariancePriorsToString <- function(covPriors, numGroupsPerFactor, digits)
 
 printPriors <- function(priors, numGroupsPerFactor, digits) {
   covariancePriorOutput <- covariancePriorsToString(priors$covPriors, numGroupsPerFactor, digits)
-  if (length(covariancePriorOutput) > 0) {
-    cat("Cov prior  : ", covariancePriorOutput[1], "\n", sep="")
-    if (length(covariancePriorOutput) > 1) {
-      for (i in 2:length(covariancePriorOutput))
+  if (length(covariancePriorOutput) > 0L) {
+    cat("Cov prior  : ", covariancePriorOutput[1L], "\n", sep="")
+    if (length(covariancePriorOutput) > 1L) {
+      for (i in seq.int(2L, length(covariancePriorOutput)))
         cat("           : ", covariancePriorOutput[i], "\n", sep="")
     }
   }
