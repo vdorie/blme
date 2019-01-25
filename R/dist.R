@@ -38,15 +38,40 @@ lmmDistributions <- list(
     common.scale <- blme:::deparseCommonScale(common.scale)
 
     if (missing(cov) && !is.null(sd)) {
+      if (!is.null(names(sd)) && any(names(sd) %not_in% .fixefNames & names(sd) != ""))
+        stop("unrecognized fixed effects for normal prior: '",
+             paste0(names(sd)[names(sd) %not_in% .fixefNames & names(sd) != ""], collapse = "', '"), "'")
+      
       sd <- sd^2
       if (length(sd) == 1L) {
+        cov <- if (!is.null(names(sd))) {
+          diag(c(rep_len(Inf, which(.fixefNames %in% names(sd)) - 1L),
+                 sd,
+                 rep_len(Inf, p - which(.fixefNames %in% names(sd)))), p)
+        } else { diag(sd, p) }
+      } else if (length(sd) == 2L && p > 2L) {
+        if (!is.null(names(sd)) && any(names(sd) != "")) {
+          if (!any(names(sd) == ""))
+            stop("for 2-parameter default normal prior specification with names, the default name must be left blank")
+          sd <- c(rep_len(sd[names(sd) == ""], which(.fixefNames %in% names(sd)) - 1L),
+                  sd[names(sd) != ""],
+                  rep_len(sd[names(sd) == ""], p - which(.fixefNames %in% names(sd))))
+        } else {
+          sd <- c(sd[1L], rep_len(sd[2L], p - 1L))
+        }
         cov <- diag(sd, p)
-      } else if (length(sd) == 2L && p > 1L) {
-        cov <- diag(c(sd[1L], rep_len(sd[2L], p - 1L)), p)
       } else {
         if (length(sd) > p) warning("length of sd in normal prior exceeds number of fixed effects")
         
+        sd.names <- names(sd)
+        
         sd <- rep_len(sd, p)
+        if (!is.null(sd.names)) {
+          names(sd) <- rep_len(sd.names, p)
+          ind <- match(.fixefNames, names(sd))
+          ind[is.na(ind)] <- which(names(sd) %not_in% .fixefNames)
+          sd <- sd[ind]
+        }
         cov <- diag(sd, p)
       }
     }
@@ -62,10 +87,18 @@ lmmDistributions <- list(
     if (any(cov != t(cov))) stop("normal covariance not symmetric")
     
     logDet <- determinant(cov, TRUE)
-    if (logDet$sign < 0 || is.infinite(logDet$modulus))
+    if (logDet$sign < 0)
       stop("normal prior covariance negative semi-definite")
+    if (is.infinite(logDet$modulus)) {
+      if (any(cov[upper.tri(cov) | lower.tri(cov)] != 0))
+        stop("normal prior covariance infinite")
+      ## special case for diagonal scale matrices with infinite variances
+      R.cov.inv <- diag(1 / sqrt(diag(cov)))
+    } else {
+      R.cov.inv <- solve(chol(cov))
+    }
     
-    new("bmerNormalDist", commonScale = common.scale, R.cov.inv = solve(chol(cov)))
+    new("bmerNormalDist", commonScale = common.scale, R.cov.inv = R.cov.inv)
   },
   t = function(df = 3, mean = 0, scale = c(10^2, 2.5^2), common.scale = TRUE) {
     matchedCall <- match.call()

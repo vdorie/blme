@@ -11,6 +11,7 @@ mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
   devFunEnv$priors <-
     evaluatePriorArguments(priors$covPriors, priors$fixefPrior, priors$residPrior,
                            c(n = nrow(X), p = ncol(X), GLMM = 0L, REML = if (REML) 1L else 0L),
+                           colnames(X),
                            reTrms$cnms, devFunEnv$ranefStructure$numGroupsPerFactor,
                            parent.frame(2L))
   
@@ -43,6 +44,7 @@ mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
   devFunEnv$priors <-
     evaluatePriorArguments(priors$covPriors, priors$fixefPrior, NULL,
                            c(n = nrow(X), p = ncol(X), GLMM = 1L),
+                           colnames(X),
                            reTrms$cnms, devFunEnv$ranefStructure,
                            parent.frame(2L))
 
@@ -118,57 +120,57 @@ getBlmerDevianceFunctionBody <- function(devFunEnv)
   sink(stringConnection)
 
   cat("{\n")
-  cat("  expandParsInCurrentFrame(theta, parInfo);\n",
-      "  pp$setTheta(as.double(theta));\n\n", sep = "")
+  cat("  expandParsInCurrentFrame(theta, parInfo)\n",
+      "  pp$setTheta(as.double(theta))\n\n", sep = "")
   devFunEnv$expandParsInCurrentFrame <- expandParsInCurrentFrame
   
   if (sigmaOptimizationType == SIGMA_OPTIM_POINT)
-    cat("  sigma <- priors$residPrior@value;\n")
+    cat("  sigma <- priors$residPrior@value\n")
 
   if (is(fixefPrior, "bmerNormalDist")) {
     if (fixefPrior@commonScale == FALSE) {
-      cat("  pp$updateDecomp(sigma * priors$fixefPrior@R.cov.inv);\n")
+      cat("  pp$updateDecomp(sigma * priors$fixefPrior@R.cov.inv)\n")
     } else {
-      cat("  pp$updateDecomp(priors$fixefPrior@R.cov.inv);\n")
+      cat("  pp$updateDecomp(priors$fixefPrior@R.cov.inv)\n")
     }
   } else {
-    cat("  pp$updateDecomp();\n")
+    cat("  pp$updateDecomp()\n")
   }
 
   cat("\n")
 
-  cat("  resp$updateMu(pp$linPred(0.0));\n",
-      "  pp$updateRes(resp$wtres);\n",
-      "  pp$solve();\n",
-      "  resp$updateMu(pp$linPred(1.0));\n\n", sep = "")
+  cat("  resp$updateMu(pp$linPred(0.0))\n",
+      "  pp$updateRes(resp$wtres)\n",
+      "  pp$solve()\n",
+      "  resp$updateMu(pp$linPred(1.0))\n\n", sep = "")
 
   if (fixefOptimizationType != FIXEF_OPTIM_NUMERIC) {
-    cat("  beta <- pp$beta(1.0);\n")
+    cat("  beta <- pp$beta(1.0)\n")
   }
-  cat("  Lambda.ts <- getCovBlocks(pp$Lambdat, ranefStructure);\n")
+  cat("  Lambda.ts <- getCovBlocks(pp$Lambdat, ranefStructure)\n")
   if (sigmaOptimizationType == SIGMA_OPTIM_NUMERIC ||
       sigmaOptimizationType == SIGMA_OPTIM_POINT) {
-    cat("  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts, sigma);\n")
+    cat("  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts, sigma)\n")
   } else {
-    cat("  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts);\n")
+    cat("  exponentialTerms <- calculatePriorExponentialTerms(priors, beta, Lambda.ts)\n")
   }
-  cat("  polynomialTerm <- calculatePriorPolynomialTerm(priors$covPriors, Lambda.ts);\n\n")
+  cat("  polynomialTerm <- calculatePriorPolynomialTerm(priors$covPriors, Lambda.ts)\n\n")
   devFunEnv$calculatePriorExponentialTerms <- calculatePriorExponentialTerms
   devFunEnv$calculatePriorPolynomialTerm <- calculatePriorPolynomialTerm
   devFunEnv$getCovBlocks <- getCovBlocks
 
   if (fixefOptimizationType == FIXEF_OPTIM_NUMERIC) {
-    cat("  exponentialTerms <- calculateFixefExponentialTerm(beta, pp$beta(1.0), pp$RX(), exponentialTerms);\n")
+    cat("  exponentialTerms <- calculateFixefExponentialTerm(beta, pp$beta(1.0), pp$RX(), exponentialTerms)\n")
     devFunEnv$calculateFixefExponentialTerm <- calculateFixefExponentialTerm
   }
   
   if (sigmaOptimizationType != SIGMA_OPTIM_NUMERIC &&
       sigmaOptimizationType != SIGMA_OPTIM_POINT) {
-    cat("  sigma <- profileSigma(pp, resp, exponentialTerms, blmerControl);\n\n", sep = "")
+    cat("  sigma <- profileSigma(pp, resp, exponentialTerms, blmerControl)\n\n", sep = "")
     devFunEnv$profileSigma <- getSigmaProfiler(priors, blmerControl)
   }
 
-  cat("  lmmObjective(pp, resp, sigma, exponentialTerms, polynomialTerm, blmerControl);\n")
+  cat("  lmmObjective(pp, resp, sigma, exponentialTerms, polynomialTerm, blmerControl)\n")
   devFunEnv$lmmObjective <- lmmObjective
   
   cat("}\n")
@@ -330,35 +332,35 @@ getBglmerDevianceFunctionBody <- function(devFunEnv, fixefAreParams)
   cat("{\n")
 
   if (fixefAreParams)
-    cat("  resp$setOffset(baseOffset);\n")
+    cat("  resp$setOffset(baseOffset)\n")
 
-  cat("  resp$updateMu(lp0);\n")
+  cat("  resp$updateMu(lp0)\n")
 
   if (!fixefAreParams) {
-    cat("  spars <- rep(0, ncol(pp$X));\n",
-        "  pp$setTheta(as.double(theta));\n", sep = "")
+    cat("  spars <- rep(0, ncol(pp$X))\n",
+        "  pp$setTheta(as.double(theta))\n", sep = "")
     if (packageVersion("lme4") <= "1.1.7") {
-      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, verbose=verbose);\n")
+      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, verbose=verbose)\n")
     } else {
-      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, maxit=maxit, verbose=verbose);\n")
+      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, maxit=maxit, verbose=verbose)\n")
     }
   } else {
-    cat("  pp$setTheta(as.double(pars[dpars]));\n",
-        "  spars <- as.numeric(pars[-dpars]);\n",
-        "  offset <- if (length(spars) == 0) baseOffset else baseOffset + pp$X %*% spars;\n",
-        "  resp$setOffset(offset);\n\n", sep = "")
+    cat("  pp$setTheta(as.double(pars[dpars]))\n",
+        "  spars <- as.numeric(pars[-dpars])\n",
+        "  offset <- if (length(spars) == 0) baseOffset else baseOffset + pp$X %*% spars\n",
+        "  resp$setOffset(offset)\n\n", sep = "")
     if (packageVersion("lme4") <= "1.1.7") {
-      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, verbose=verbose);\n")
+      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, verbose=verbose)\n")
     } else {
-      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, maxit=maxit, verbose=verbose);\n")
+      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, maxit=maxit, verbose=verbose)\n")
     }
   }
   
-  cat("  resp$updateWts();\n\n",
+  cat("  resp$updateWts()\n\n",
       
-      "  Lambda.ts <- getCovBlocks(pp$Lambdat, ranefStructure);\n",
-      "  exponentialTerms <- calculatePriorExponentialTerms(priors, spars, Lambda.ts);\n",
-      "  polynomialTerm <- calculatePriorPolynomialTerm(priors$covPriors, Lambda.ts);\n\n",
+      "  Lambda.ts <- getCovBlocks(pp$Lambdat, ranefStructure)\n",
+      "  exponentialTerms <- calculatePriorExponentialTerms(priors, spars, Lambda.ts)\n",
+      "  polynomialTerm <- calculatePriorPolynomialTerm(priors$covPriors, Lambda.ts)\n\n",
       
       "  p + exponentialTerms[[1]] + polynomialTerm + blmerControl$constant\n",
       "}\n",

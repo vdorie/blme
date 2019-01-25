@@ -78,23 +78,27 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   if (devFunOnly) return(devfun)
   
   devFunEnv <- environment(devfun)
-  opt <- optimizeLmer(devfun,
-                      optimizer=control$optimizer,
-                      restart_edge=control$restart_edge,
-                      boundary.tol=control$boundary.tol,
-                      control=control$optCtrl,
-                      verbose=verbose,
-                      start=start,
-                      calc.derivs=control$calc.derivs,
-                      use.last.params=control$use.last.params)
-
+  opt <- if (control$optimizer=="none")
+    list(par=NA,fval=NA,conv=1000,message="no optimization")
+  else {
+        optimizeLmer(devfun, optimizer = control$optimizer,
+                     restart_edge = control$restart_edge,
+                     boundary.tol = control$boundary.tol,
+                     control = control$optCtrl,
+                     verbose=verbose,
+                     start=start,
+                     calc.derivs=control$calc.derivs,
+                     use.last.params=control$use.last.params)
+  }
+  
   ## dirty hacks to give some backwards lme4 compatibility
   cc <- NULL
   lme4Namespace <- getNamespace("lme4")
   if (exists("checkConv", lme4Namespace)) {
-    cc <- get("checkConv", lme4Namespace)(attr(opt,"derivs"), opt$par,
-                                          ctrl = control$checkConv,
-                                          lbound = environment(devfun)$lower)
+    checkConv <- get("checkConv", lme4Namespace)
+    cc <- checkConv(attr(opt, "derivs"), opt$par,
+                    ctrl = control$checkConv,
+                    lbound = environment(devfun)$lower)
   }
 
   args <- list(rho = devFunEnv, opt = opt, reTrms = lmod$reTrms, fr = lmod$fr, mc = mcout)
@@ -106,8 +110,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
 }
 
 bglmer <- function(formula, data = NULL, family = gaussian,
-                   control = glmerControl(), start = NULL, verbose = 0L,
-                   maxit = 100L, nAGQ = 1L,
+                   control = glmerControl(), start = NULL, verbose = 0L, nAGQ = 1L,
                    subset, weights, na.action, offset,
                    contrasts = NULL, mustart, etastart, devFunOnly = FALSE,
                    cov.prior = wishart, fixef.prior = NULL,
@@ -153,15 +156,16 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   glmod$formula <- NULL
   
   ## create deviance function for covariance parameters (theta)
-  
-  devfun <- do.call(mkBglmerDevfun, c(glmod, glmod$X, glmod$reTrms,
+  nAGQinit <- if(control$nAGQ0initStep) 0L else 1L
+  devfun <- do.call(mkBglmerDevfun, c(glmod,
                                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior),
                                            verbose = verbose,
-                                           maxit = maxit,
-                                           control = control, nAGQ = 0)))
+                                           control = control,
+                                           nAGQ = nAGQinit)))
   if (nAGQ==0 && devFunOnly) return(devfun)
   ## optimize deviance function over covariance parameters
   
+  ## FIXME: perhaps should be in glFormula instead??
   if (is.list(start)) {
     start.bad <- setdiff(names(start),c("theta","fixef"))
     if (length(start.bad)>0) {
@@ -177,6 +181,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   if (packageVersion("lme4") <= "1.1-7" || identical(control$nAGQ0initStep, TRUE)) {
     args <- list(devfun = devfun,
                  optimizer = control$optimizer[[1]],
+                 ## DON'T try fancy edge tricks unless nAGQ=0 explicitly set
                  restart_edge = if (nAGQ == 0) control$restart_edge else FALSE,
                  control = control$optCtrl,
                  start = start,
@@ -189,19 +194,13 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   }
   
   if(nAGQ > 0L) {
+    start <- get("updateStart", getNamespace("lme4"))(start,theta=opt$par)
+    
     ## update deviance function to include fixed effects as inputs
     devfun <- updateBglmerDevfun(devfun, glmod$reTrms, nAGQ = nAGQ)
     
-    if (control$nAGQ0initStep) {
-      start <- get("updateStart", getNamespace("lme4"))(start,theta=opt$par)
-      
-      ## if nAGQ0 was skipped
-      ## we don't actually need to do anything here, it seems --
-      ## getStart gets called again in optimizeGlmer ...
-    }
-    
     if (devFunOnly) return(devfun)
-    
+    ## reoptimize deviance function over covariance parameters and fixed effects 
     args <- list(devfun = devfun,
                  optimizer = control$optimizer[[2]],
                  restart_edge = control$restart_edge,
@@ -221,11 +220,13 @@ bglmer <- function(formula, data = NULL, family = gaussian,
 
   lme4Namespace <- getNamespace("lme4")
   cc <- if (!is.null(control$calc.derivs) && !control$calc.derivs) NULL else {
-    if (verbose > 10) cat("checking convergence\n")
-    if (exists("checkConv", lme4Namespace))
-      get("checkConv", lme4Namespace)(attr(opt,"derivs"), opt$par,
-                                      ctrl = control$checkConv,
-                                      lbound = environment(devfun)$lower)
+    if (exists("checkConv", lme4Namespace)) {
+      if (verbose > 10) cat("checking convergence\n")
+      checkConv <- get("checkConv", lme4Namespace)
+      checkConv(attr(opt,"derivs"), opt$par,
+                ctrl = control$checkConv,
+                lbound = environment(devfun)$lower)
+    }
     else NULL
   }
   
@@ -400,9 +401,9 @@ setPrior <- function(regression, cov.prior = NULL,
     matchedCall$resid.prior <- matchedCall$var.prior
     residMissing <- FALSE
   }
-
+  
   priors <- evaluatePriorArguments(matchedCall$cov.prior, matchedCall$fixef.prior, matchedCall$resid.prior,
-                                   regression@devcomp$dim, regression@cnms,
+                                   regression@devcomp$dim, colnames(regression@pp$X), regression@cnms,
                                    as.integer(diff(regression@Gp) / sapply(regression@cnms, length)),
                                    envir)
 
@@ -430,7 +431,7 @@ parsePrior <- function(regression, cov.prior = NULL,
   }
 
   priors <- evaluatePriorArguments(matchedCall$cov.prior, matchedCall$fixef.prior, matchedCall$resid.prior,
-                                   regression@devcomp$dim, regression@cnms,
+                                   regression@devcomp$dim, colnames(regression@pp$X), regression@cnms,
                                    as.integer(diff(regression@Gp) / sapply(regression@cnms, length)),
                                    envir)
 
@@ -500,9 +501,9 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
     }
   }
     
-  oldresp <- object@resp$y # need to set this before deep copy,
-                           # otherwise it gets reset with the call
-                           # to setResp below
+  ## oldresp <- object@resp$y # need to set this before deep copy,
+  ##                          # otherwise it gets reset with the call
+  ##                          # to setResp below
   
   
   ## somewhat repeated from profile.merMod, but sufficiently
@@ -614,7 +615,7 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   devlist <- if (isGLMM(object))
     list(tolPwrss    = dc$cmp [["tolPwrss"]],
 	 compDev     = dc$dims[["compDev"]],
-	 nAGQ        = nAGQ,
+	 nAGQ        = unname(nAGQ),
 	 lp0         = pp$linPred(1), ## object@resp$eta - baseOffset,
 	 baseOffset  = baseOffset,
 	 pwrssUpdate = glmerPwrssUpdate,
@@ -675,13 +676,15 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
     } else {
       args <- list(devfun = ff,
                    optimizer = object@optinfo$optimizer,
+                   restart_edge = control$restart_edge,
+                   control = control$optCtrl,
                    start = extractParameterListFromFit(object, environment(ff)$blmerControl),
                    nAGQ = nAGQ,
-                   boundary.tol = 1.0e-5,
                    verbose = verbose,
                    stage = 2)
+      if (!is.null(formals(optimizeGlmer)$boundary.tol)) args$boundary.tol <- control$boundary.tol
       if (!is.null(formals(optimizeGlmer)[["..."]])) {
-        args$calc.derivs <- calc.derivs
+        args$calc.derivs <- control$calc.derivs
         args$use.last.params <- if (!is.null(control$use.last.params)) control$use.last.params else FALSE
       }
       do.call(optimizeGlmer, args, TRUE)
@@ -702,3 +705,4 @@ refit.bmerMod <- function(object, newresp = NULL, rename.response = FALSE,
   result <- do.call(mkMerMod, args, TRUE, sys.frame(0))
   repackageMerMod(result, opt, environment(ff)) 
 }
+

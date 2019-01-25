@@ -120,14 +120,14 @@ evaluateResidualPrior <- function(residPrior, defnEnv, evalEnv) {
 }
   
 evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
-                                   dims, factorColumnNames, numGroupsPerFactor, parentEnv) {
+                                   dims, fixefNames, factorColumnNames, numGroupsPerFactor, parentEnv) {
   result <- list()
   evalEnv <- new.env(parent = parentEnv)
   defnEnv <- new.env()
   
   defnEnv$p <- defnEnv$n.fixef <- dims[["p"]]
   defnEnv$n <- defnEnv$n.obs   <- dims[["n"]]
-
+  defnEnv$.fixefNames <- fixefNames
   isLMM <- dims[["GLMM"]] == 0L
   
   ## add the names of dist functs to the evaluating env

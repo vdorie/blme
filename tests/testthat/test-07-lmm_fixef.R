@@ -61,6 +61,23 @@ test_that("blmer fits test data with t prior, pulling coefs towards prior mean",
   expect_true(all(fit2@beta > fit1@beta))
 })
 
+test_that("blme fits test data with normal prior, infinite variances", {
+  fixef.prior <- "normal(sd = c(Inf, 2.5, Inf), common.scale = TRUE)"
+  startingValues <- list(theta = c(0.65040570391375, -0.155836402048548, 1.40007024700731, 0.792859752406217, 0.309502757134706, -0.00960238340899774, 0.951434187107545, 0.120357370844577, 3.28141165783528e-08))
+  fit1 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                testData, REML = FALSE, control = control, start = startingValues,
+                cov.prior = NULL, fixef.prior = fixef.prior)
+  
+  fixef.prior <- "normal(sd = c(10, 2.5, 10), common.scale = TRUE)"
+  startingValues <- list(theta = c(0.656112749203895, -0.160153337136109, 1.41411083191824, 0.801072376964595, 0.314002356189888, -0.0102771543211311, 0.96001117254404, 0.121335386913439, 0))
+  fit2 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                testData, REML = FALSE, control = control, start = startingValues,
+                cov.prior = NULL, fixef.prior = fixef.prior)
+  
+  ## weak test, but mostly that it runs
+  expect_true(all(abs(fit2@beta[-2L]) < abs(fit1@beta[-2L])))
+})
+
 test_that("blme fits test data with t prior, infinite variances", {
   fixef.prior <- "t(3, scale = c(Inf, 2.5^2, Inf), common.scale = FALSE)"
   startingValues <- list(theta = c(0.647090004202988, -0.153430452141895, 1.39376002360987, 0.788156951920134, 0.307237491068136, -0.00914717614020565, 0.94737787538623, 0.119813551302683, 0),
@@ -69,7 +86,7 @@ test_that("blme fits test data with t prior, infinite variances", {
                 testData, REML = FALSE, control = control, start = startingValues,
                 cov.prior = NULL, fixef.prior = fixef.prior)
   
-  fixef.prior <- "t(3, scale = c(10^2, 2.5^2), common.scale = FALSE)"
+  fixef.prior <- "t(3, scale = c(10^2, 2.5^2, 2.5^2), common.scale = FALSE)"
   startingValues <- list(theta = c(0.645289664330177, -0.151604332140352, 1.39404761930357, 0.788435718441722, 0.312013729923666, -0.0155461916762167, 0.949082870229164, 0.117100582888698, 0),
                          beta = c(5.32508665168687, 1.16859904165051, 4.0443701271478))
   fit2 <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),

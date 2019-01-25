@@ -10,14 +10,13 @@
   \code{\link[lme4]{lmer}}.
 }
 \usage{
-blmer(formula, data, REML = TRUE,
+blmer(formula, data = NULL, REML = TRUE,
       control = lmerControl(), start = NULL, verbose = 0L,
       subset, weights, na.action, offset, contrasts = NULL,
       devFunOnly = FALSE, cov.prior = wishart,
       fixef.prior = NULL, resid.prior = NULL, \dots)
-bglmer(formula, data, family = gaussian,
+bglmer(formula, data = NULL, family = gaussian,
        control = glmerControl(), start = NULL, verbose = 0L,
-       maxit = 100L,
        nAGQ = 1L, subset, weights, na.action, offset,
        contrasts = NULL, mustart, etastart,
        devFunOnly = FALSE, cov.prior = wishart,
@@ -40,7 +39,7 @@ bglmer(formula, data, family = gaussian,
     \code{\link[lme4]{glmer}} a numeric vector or named list. Unlike the aforementioned,
     list members of \code{fixef} and \code{sigma} are applicable to linear mixed models
     provided that numeric optimization is required for these parameters.}
-  \item{formula, data, REML, family, control, verbose, maxit, nAGQ,
+  \item{formula, data, REML, family, control, verbose, nAGQ,
     mustart, etastart, devFunOnly, \dots}{model specification arguments as in \code{\link[lme4]{lmer}} and \code{\link[lme4]{glmer}};
     see there for details.}
   \item{subset, weights, na.action, offset, contrasts}{further model

@@ -19,13 +19,6 @@ optimizeLmer <- function(devfun,
   rho$lower <- lowerBounds ## b/c lower bounds are pulled from devfunenv to check convergence
   thetaLowerBounds <- lowerBounds[seq_along(rho$pp$theta)]
   
-  ## if (is.null(start)) {
-  ##  start <- getStart(start, rho)
-  ##  start <- setLowerBounds(start, rho)
-  ##}
-  ##startingValues <- foldPars(start)
-  ##lowerBounds <- foldLowers(start)
-
   optwrap <- get("optwrap", lme4Env)
   lme4IsOld <- is.null(formals(optwrap)[["calc.derivs"]])
   opt <-
