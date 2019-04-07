@@ -28,8 +28,6 @@ importFrom(stats, getCall, setNames)
 
 importFrom(utils, data, getS3method, packageVersion)
 
-importFrom(expint, expint_E1)
-
 importClassesFrom(lme4, merMod, lmerMod, glmerMod)
 importFrom(lme4, lmer, glmer)
 importFrom(lme4, lFormula, glFormula)

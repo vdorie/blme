@@ -1,5 +1,6 @@
 mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
-                          verbose = 0L, control = lmerControl(), priors = NULL, ...) {
+                          verbose = 0L, control = lmerControl(), priors = NULL,
+                          env = parent.frame(1L), ...) {
   devfun <- mkLmerDevfun(fr, X, reTrms, REML, start, verbose, control, ...)
   devFunEnv <- environment(devfun)
   pred <- devFunEnv$pp
@@ -13,7 +14,7 @@ mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
                            c(n = nrow(X), p = ncol(X), GLMM = 0L, REML = if (REML) 1L else 0L),
                            colnames(X),
                            reTrms$cnms, devFunEnv$ranefStructure$numGroupsPerFactor,
-                           parent.frame(2L))
+                           env)
   
   devFunEnv$blmerControl <- createBlmerControl(pred, resp, devFunEnv$priors)
   devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl)
@@ -27,7 +28,7 @@ mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
 mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
                            maxit = 100L,
                            control=glmerControl(),
-                           priors = NULL, ...) {
+                           priors = NULL, env = parent.frame(1L), ...) {
   devfun <-
     if (packageVersion("lme4") <= "1.1.7") {
      mkGlmerDevfun(fr, X, reTrms, family, nAGQ, verbose, control, ...)
@@ -46,7 +47,7 @@ mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
                            c(n = nrow(X), p = ncol(X), GLMM = 1L),
                            colnames(X),
                            reTrms$cnms, devFunEnv$ranefStructure,
-                           parent.frame(2L))
+                           env)
 
   
   devFunEnv$blmerControl <- createBlmerControl(pred, resp, devFunEnv$priors)

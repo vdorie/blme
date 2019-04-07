@@ -15,6 +15,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
                   ...)
 {
   mc <- mcout <- match.call()
+  callingEnv <- parent.frame(1L)
   missCtrl <- missing(control)
   missCovPrior <- missing(cov.prior)
   ## see functions in modular.R for the body ...
@@ -73,7 +74,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   devfun <- do.call(mkBlmerDevfun,
                     c(lmod, lmod$X, lmod$reTrms,
                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior, residPrior = resid.prior),
-                           start = lmerStart, verbose = verbose, control = control)))
+                           start = lmerStart, verbose = verbose, control = control, env = callingEnv)))
   
   if (devFunOnly) return(devfun)
   
@@ -117,6 +118,7 @@ bglmer <- function(formula, data = NULL, family = gaussian,
                    ...)
 {
   covPriorMissing <- missing(cov.prior)
+  callingEnv <- parent.frame(1L)
   
   if (!inherits(control, "glmerControl")) {
     if(!is.list(control)) stop("'control' is not a list; use glmerControl()")
@@ -141,9 +143,9 @@ bglmer <- function(formula, data = NULL, family = gaussian,
   if( is.function(family)) family <- family()
   if (isTRUE(all.equal(family, gaussian()))) {
     ## redirect to lmer (with warning)
-    warning("calling glmer() with family=gaussian (identity link) as a shortcut to lmer() is deprecated;",
-            " please call lmer() directly")
-    mc[[1]] <- quote(lme4::lmer)
+    warning("calling bglmer() with family=gaussian (identity link) as a shortcut to blmer() is deprecated;",
+            " please call blmer() directly")
+    mc[[1]] <- quote(blme::blmer)
     mc["family"] <- NULL            # to avoid an infinite loop
     return(eval(mc, parent.frame()))
   }
@@ -161,7 +163,8 @@ bglmer <- function(formula, data = NULL, family = gaussian,
                                       list(priors = list(covPriors = cov.prior, fixefPrior = fixef.prior),
                                            verbose = verbose,
                                            control = control,
-                                           nAGQ = nAGQinit)))
+                                           nAGQ = nAGQinit,
+                                           env = callingEnv)))
   if (nAGQ==0 && devFunOnly) return(devfun)
   ## optimize deviance function over covariance parameters
   

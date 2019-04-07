@@ -18,13 +18,20 @@ evaluateFixefPrior <- function(fixefPrior, defnEnv, evalEnv) {
   NULL
 }
 
-evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv) {
+evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv, callingEnv) {
   numFactors <- length(factorColumnNames)
   factorNames <- names(factorColumnNames)
   result <- vector("list", numFactors)
   defaultCovPrior <- NULL
 
   if (is.null(covPriors)) return(result)
+  
+  # check to see if it refers to a variable in the calling environment
+  if (is.symbol(covPriors) && as.character(covPriors) %not_in% covDistributions) {
+    tryResult <- tryCatch(variableLookup <- get(as.character(covPriors), envir = callingEnv), error = I)
+    
+    if (!is(tryResult, "error")) covPriors <- variableLookup
+  }
   
   if (is.character(covPriors)) {
     covPriors <- gsub("inverse.wishart", "invwishart", covPriors)
@@ -39,7 +46,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
   for (i in seq_along(covPriors)) {
     covPrior.i <- covPriors[[i]]
     ## can't just let 'em re-define "wishart", or use the built-in gamma
-    if (is.symbol(covPrior.i) && exists(toString(covPrior.i), envir = evalEnv) &&
+    if (is.symbol(covPrior.i) && exists(as.character(covPrior.i), envir = evalEnv) &&
         !(as.character(covPrior.i) %in% covDistributions)) {
       covPrior.i <- get(toString(covPrior.i), envir = evalEnv)
       if (is.character(covPrior.i)) covPrior.i <- parse(text = covPrior.i)[[1]]
@@ -120,9 +127,9 @@ evaluateResidualPrior <- function(residPrior, defnEnv, evalEnv) {
 }
   
 evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
-                                   dims, fixefNames, factorColumnNames, numGroupsPerFactor, parentEnv) {
+                                   dims, fixefNames, factorColumnNames, numGroupsPerFactor, callingEnv) {
   result <- list()
-  evalEnv <- new.env(parent = parentEnv)
+  evalEnv <- new.env(parent = callingEnv)
   defnEnv <- new.env()
   
   defnEnv$p <- defnEnv$n.fixef <- dims[["p"]]
@@ -146,7 +153,7 @@ evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
   result$fixefPrior <- evaluateFixefPrior(fixefPrior, defnEnv, evalEnv)
   if ((is(result$fixefPrior, "bmerTDist") || is(result$fixefPrior, "bmerHorseshoeDist")) && isLMM && dims[["REML"]] > 0L)
     stop("t/horseshoe distribution for fixed effects only supported when REML = FALSE")
-  result$covPriors  <- evaluateCovPriors(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv)
+  result$covPriors  <- evaluateCovPriors(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv, callingEnv)
 
   if (isLMM) {
     environment(residualVarianceGammaPrior) <- defnEnv
