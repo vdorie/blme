@@ -20,7 +20,7 @@ toString.bmerGammaDist <- function(x, digits = getOption("digits"), includeCommo
 }
 
 toString.bmerInvGammaDist <- function(x, digits = getOption("digits"), includeCommonScale = TRUE, ...) {
-  paste("gamma(shape = ", round(x@shape, digits),
+  paste("invgamma(shape = ", round(x@shape, digits),
         ", scale = ", round(x@scale, digits),
         ", posterior.scale = ", x@posteriorScale,
         if (includeCommonScale) paste(", common.scale = ", x@commonScale, sep = "") else "",

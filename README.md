@@ -3,7 +3,7 @@ blme
 
 Bayesian Linear Mixed Effect Models
 
-A package for R. Built off of ['lme4'](https://cran.r-project.org/package=lme4)
+A package for R. Built off of [lme4](https://cran.r-project.org/package=lme4)
 
 Pre-built binaries of the package are available on [CRAN](https://cran.r-project.org/package=blme). These can be installed from within R using the typical `install.packages()` mechanism.
 
