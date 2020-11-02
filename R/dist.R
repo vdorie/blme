@@ -314,66 +314,66 @@ lmmDistributions <- list(
 glmmDistributions <- list(
   flat = lmmDistributions$flat,
   normal = function(sd = c(10, 2.5), cov) {
-    normal <- blme:::lmmDistributions$normal
-    environment(normal) <- environment()
+    .prior <- blme:::lmmDistributions$normal
+    environment(.prior) <- environment()
     
     matchedCall <- match.call()
     if (!is.null(matchedCall$sd) && !is.null(matchedCall$cov))
       warning("both sd and cov supplied to normal - only cov will be used")
     if (!is.null(matchedCall$cov)) {
-      cov <- eval(matchedCall$cov)
-      return(normal(cov = cov, common.scale = FALSE))
+      eval(substitute(.prior(cov = cov, common.scale = FALSE), environment()),
+           parent.frame())
+    } else {
+      eval(substitute(.prior(sd = sd, common.scale = FALSE), environment()),
+           parent.frame())
     }
-    if (!is.null(matchedCall$sd)) sd <- eval(matchedCall$sd)
-
-    normal(sd = sd, common.scale = FALSE)
   },
   t = function(df = 3, mean = 0, scale = c(10^2, 2.5^2)) {
-    t <- blme:::lmmDistributions$t
-    environment(t) <- environment()
-        
-    matchedCall <- match.call()
-    if (!is.null(matchedCall$df)) df <- eval(matchedCall$df)
-    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
-    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+    .prior <- blme:::lmmDistributions$t
+    environment(.prior) <- environment()
     
-    t(df = df, mean = mean, scale = scale, common.scale = FALSE)
+    eval(substitute(.prior(df, mean, scale, FALSE), environment()),
+         parent.frame()) 
   },
   horseshoe = function(mean = 0, global.shrinkage = 2.5) {
-    horseshoe <- blme:::lmmDistributions$horseshoe
-    environment(horseshoe) <- environment()
-        
-    matchedCall <- match.call()
-    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
-    if (!is.null(matchedCall$global.shrinkage)) scale <- eval(matchedCall$global.shrinkage)
+    .prior <- blme:::lmmDistributions$horseshoe
+    environment(.prior) <- environment()
     
-    horseshoe(mean = mean, global.shrinkage = global.shrinkage)
+    eval(substitute(.prior(mean, global.shrinkage, FALSE), environment()),
+         parent.frame()) 
   },
   gamma = function(shape = 2.5, rate = 0, posterior.scale = "sd") {
-    gamma <- blme:::lmmDistributions$gamma
-    environment(gamma) <- environment()
-    gamma(shape, rate, TRUE, posterior.scale) 
+    .prior <- blme:::lmmDistributions$gamma
+    environment(.prior) <- environment()
+    
+    eval(substitute(.prior(shape, rate, TRUE, posterior.scale), environment()),
+         parent.frame()) 
   },
   invgamma = function(shape = 0.5, scale = 10^2, posterior.scale = "sd") {
-    invgamma <- blme:::lmmDistributions$invgamma
-    environment(invgamma) <- environment()
-    invgamma(shape, scale, TRUE, posterior.scale)
+    .prior <- blme:::lmmDistributions$invgamma
+    environment(.prior) <- environment()
+    eval(substitute(.prior(shape, scale, TRUE, posterior.scale), environment()),
+         parent.frame())
   },
-  wishart = function(df = level.dim + 2.5, scale = Inf, common.scale = TRUE, posterior.scale = "cov") {
-    wishart <- blme:::lmmDistributions$wishart
-    environment(wishart) <- environment()
-    wishart(df, scale, TRUE, posterior.scale)
+  wishart = function(df = level.dim + 2.5, scale = Inf, posterior.scale = "cov") {
+    .prior <- blme:::lmmDistributions$wishart
+    environment(.prior) <- environment()
+    
+    eval(substitute(.prior(df, scale, TRUE, posterior.scale), environment()),
+         parent.frame())
   },
   invwishart = function(df = level.dim - 0.5, scale = diag(10^2 / (df + level.dim + 1), level.dim),
-                        common.scale = TRUE, posterior.scale = "cov") {
-    invwishart <- blme:::lmmDistributions$invwishart
-    environment(invwishart) <- environment()
-    invwishart(df, scale, TRUE, posterior.scale)
+                        posterior.scale = "cov") {
+    .prior <- blme:::lmmDistributions$invwishart
+    environment(.prior) <- environment()
+    eval(substitute(.prior(df, scale, common.scale, posterior.scale), environment()),
+         parent.frame())
   },
   custom = function(fn, chol = FALSE, scale = "none") {
-    custom <- blme:::lmmDistributions$custom
-    environment(custom) <- environment()
-    custom(fn, chol, scale, TRUE)
+    .prior <- blme:::lmmDistributions$custom
+    environment(.prior) <- environment()
+    eval(substitute(.prior(fn, chol, scale), environment()),
+         parent.frame())
   }
 )
 

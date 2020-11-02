@@ -23,7 +23,7 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
   factorNames <- names(factorColumnNames)
   result <- vector("list", numFactors)
   defaultCovPrior <- NULL
-
+  
   if (is.null(covPriors)) return(result)
   
   # check to see if it refers to a variable in the calling environment
@@ -91,7 +91,8 @@ evaluateCovPriors <- function(covPriors, factorColumnNames, numGroupsPerFactor, 
     if (is.null(result[[i]]) && !is.null(defaultCovPrior)) result.i <- defaultCovPrior
 
     covDistributionName <- as.character(result.i[[1L]])
-    if (!(covDistributionName %in% covDistributions)) stop("unrecognized ranef covariance distribution: '", covDistributionName, "'")
+    if (!(covDistributionName %in% covDistributions))
+      stop("unrecognized ranef covariance distribution: '", covDistributionName, "'")
 
     defnEnv$q.k <- defnEnv$level.dim <- length(factorColumnNames[[i]])
     defnEnv$j.k <- defnEnv$n.grps <- numGroupsPerFactor[i]

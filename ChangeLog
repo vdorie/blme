@@ -1,3 +1,7 @@
+2020-11-02 Vincent Dorie <vdorie@gmail.com>
+
+  * Fix for programmatically defined variables not working with glmm priors. Bug fix thanks to mgoplerud.
+
 2015-05-28 Vincent Dorie <vjd4@nyu.edu>
 
   * Changed testing framework to testthat from RUnit

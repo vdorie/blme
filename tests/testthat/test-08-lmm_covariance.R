@@ -124,12 +124,13 @@ test_that("blmer fits test data with custom prior, matching builtin wishart", {
 
 test_that("blmer not confused by cov priors supplied in different forms", {
   control$optCtrl <- list(maxfun = 1L)
+  control$checkConv <- NULL
   cov.prior <- list("g.1 ~ invgamma(scale = 2)", "g.2 ~ invgamma(scale = 3)")
-  expect_is(blmer(y ~ x.1 + x.2 + (1 | g.1) + (1 | g.2), testData, cov.prior = cov.prior, control = control),
+  expect_is(suppressWarnings(blmer(y ~ x.1 + x.2 + (1 | g.1) + (1 | g.2), testData, cov.prior = cov.prior, control = control)),
             "blmerMod")
   cov.prior <- list(g.1 ~ invgamma(scale = 2), g.2 ~ invgamma(scale = 3))
-  expect_is(blmer(y ~ x.1 + x.2 + (1 | g.1) + (1 | g.2), testData, cov.prior = cov.prior, control = control),
+  expect_is(suppressWarnings(blmer(y ~ x.1 + x.2 + (1 | g.1) + (1 | g.2), testData, cov.prior = cov.prior, control = control)),
             "blmerMod")
-  expect_is(blmer(y ~ x.1 + x.2 + (1 | g.1), testData, cov.prior = wishart, control = control), "blmerMod")
-  expect_is(blmer(y ~ x.1 + x.2 + (1 | g.1), testData, cov.prior = wishart(), control = control), "blmerMod")
+  expect_is(suppressWarnings(blmer(y ~ x.1 + x.2 + (1 | g.1), testData, cov.prior = wishart, control = control)), "blmerMod")
+  expect_is(suppressWarnings(blmer(y ~ x.1 + x.2 + (1 | g.1), testData, cov.prior = wishart(), control = control)), "blmerMod")
 })

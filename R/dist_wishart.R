@@ -183,13 +183,21 @@ setMethod("getExponentialTerm", "bmerInvWishartDist",
 setMethod("getPolynomialTerm", "bmerWishartDist",
   function(object, Lambda.t) {
     factorDim <- nrow(object@R.scale.inv)
-    -2.0 * (object@df - factorDim - 1.0) * sum(log(diag(Lambda.t)))
+    lambda <- diag(Lambda.t)
+    if (any(lambda <= 0.0))
+      Inf
+    else
+      -2.0 * (object@df - factorDim - 1.0) * sum(log(lambda))
   }
 )
 
 setMethod("getPolynomialTerm", "bmerInvWishartDist",
   function(object, Lambda.t) {
     factorDim <- nrow(object@R.scale)
-   2.0 * (object@df + factorDim + 1.0) * sum(log(diag(Lambda.t)))
+    lambda <- diag(Lambda.t)
+    if (any(lambda <= 0.0))
+      Inf
+    else
+      2.0 * (object@df + factorDim + 1.0) * sum(log(lambda))
   }
 )

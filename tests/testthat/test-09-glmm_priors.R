@@ -35,4 +35,11 @@ test_that("bglmer runs with fixef horseshoe prior", {
   expect_equal(fit@theta, 1.44188949480559)
   expect_equal(fit@beta, c(-3.00402517816968e-08, 2.38133218752372, 1.40658715296947))
 })
-  
+
+test_that("bglmer runs cov prior specified using level.dim", {
+  fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), control = control,
+                cov.prior = wishart(df = level.dim + 1.25))
+  expect_is(fit, "bglmerMod")
+  expect_equal(fit@priors$cov[[1]]@df, 2.25)
+})
+
