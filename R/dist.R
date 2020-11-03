@@ -366,7 +366,7 @@ glmmDistributions <- list(
                         posterior.scale = "cov") {
     .prior <- blme:::lmmDistributions$invwishart
     environment(.prior) <- environment()
-    eval(substitute(.prior(df, scale, common.scale, posterior.scale), environment()),
+    eval(substitute(.prior(df, scale, TRUE, posterior.scale), environment()),
          parent.frame())
   },
   custom = function(fn, chol = FALSE, scale = "none") {
