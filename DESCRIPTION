@@ -1,12 +1,13 @@
 Package: blme
 Version: 1.0-5
-Date: 2019-04-07
+Date: 2020-12-20
 Title: Bayesian Linear Mixed-Effects Models
-Author: Vincent Dorie <vdorie@gmail.com>
-Maintainer: Vincent Dorie <vdorie@gmail.com>
-Description: Maximum a posteriori estimation for linear and generalized
-             linear mixed-effects models in a Bayesian setting. Extends
-             'lme4' by Douglas Bates, Martin Maechler, Ben Bolker, and Steve Walker.
+Authors@R: c(
+  person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
+  person("Douglas", "Bates", role = "ctb", comment = c("lme4 non-modular functions", ORCID = "0000-0001-8316-9503")),
+  person("Martin", "Maechler", role = "ctb", comment = c("lme4 non-modular functions", ORCID = "0000-0002-8685-9910")),
+  person("Ben", "Bolker", role = "ctb", comment = c("lme4 non-modular functions", ORCID = "0000-0002-2127-0443")),
+  person("Steven", "Walker", role = "ctb", comment = c("lme4 non-modular functions", ORCID = "0000-0002-4394-9078")))
 Depends:
   R (>= 3.0-0),
   lme4 (>= 1.0-6)
@@ -16,7 +17,9 @@ Imports:
   utils
 Suggests:
   expint (>= 0.1-3),
-  testthat (>= 0.9-0)
+  testthat
+Description: Maximum a posteriori estimation for linear and generalized linear mixed-effects models in a Bayesian setting, implementing the methods of Chung, et al. (2013) <doi:10.1007/s11336-013-9328-2>. Extends package 'lme4' (Bates, Maechler, Bolker, and Walker (2015) <doi:10.18637/jss.v067.i01>).
 License: GPL (>=2)
 URL: https://github.com/vdorie/blme
 BugReports: https://github.com/vdorie/blme/issues
+

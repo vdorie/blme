@@ -43,7 +43,8 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   mc$var.prior <- NULL
   
   sigmaIsFixed <-
-    !is.null(resid.prior) && (grepl("^\\W*point", resid.prior) || (is.call(resid.prior) && resid.prior[[1]] == "point"))
+    !is.null(resid.prior) && ((is.character(resid.prior) && grepl("^\\W*point", resid.prior)) ||
+                              (is.call(resid.prior) && resid.prior[[1]] == "point"))
   
   if (sigmaIsFixed) {
     control$checkControl$check.nobs.vs.nlev  <- "ignore"
@@ -52,7 +53,8 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   }
 
   hasPseudoData <-
-    !is.null(fixef.prior) && (grepl("^\\W*normal", fixef.prior) || (is.call(fixef.prior) && fixef.prior[[1]] == "normal"))
+    !is.null(fixef.prior) && ((is.character(fixef.prior) && grepl("^\\W*normal", fixef.prior)) ||
+                              (is.call(fixef.prior) && fixef.prior[[1]] == "normal"))
 
   if (hasPseudoData) {
     control$checkControl$check.rankX <- "ignore"

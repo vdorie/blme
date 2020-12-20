@@ -119,25 +119,34 @@ bglmer(formula, data = NULL, family = gaussian,
   \code{\linkS4class{merMod}} class, and \code{\link[stats]{lm}}.
 }
 \examples{
-##  covariance prior
 data("sleepstudy", package = "lme4")
+
+### Examples using a covariance prior ##
+
+# Here we are ignoring convergence warnings just to illustate how the package
+# is used: this is not a good idea in practice..
+control <- lmerControl(check.conv.grad = "ignore")
 (fm1 <- blmer(Reaction ~ Days + (0 + Days|Subject), sleepstudy,
+              control = control,
               cov.prior = gamma))
 (fm2 <- blmer(Reaction ~ Days + (0 + Days|Subject), sleepstudy,
+              control = control,
               cov.prior = gamma(shape = 2, rate = 0.5, posterior.scale = 'sd')))
 (fm3 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
+              control = control,
               cov.prior = wishart))
 (fm4 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
+              control = control,
               cov.prior = invwishart(df = 5, scale = diag(0.5, 2))))
 
-##  custom prior
+# Custom prior
 penaltyFn <- function(sigma)
   dcauchy(sigma, 0, 10, log = TRUE)
 (fm5 <- blmer(Reaction ~ Days + (0 + Days|Subject), sleepstudy,
               cov.prior = custom(penaltyFn, chol = TRUE, scale = "log")))
 
 
-##  fixed effect prior
+### Examples using a fixed effect prior ###
 (fm6 <- blmer(Reaction ~ Days + (1 + Days|Subject), sleepstudy,
               cov.prior = NULL,
               fixef.prior = normal))
@@ -145,15 +154,20 @@ penaltyFn <- function(sigma)
               cov.prior = NULL,
               fixef.prior = normal(cov = diag(0.5, 2), common.scale = FALSE)))
 
-##  residual variance prior
-##  eight schools example
-y <- c(28, 8, -3, 7, -1, 1, 18, 12);
-sigma <- c(15, 10, 16, 11, 9, 11, 10, 18);
-g <- 1:8;
-  
-(schools <- blmer(y ~ 1 + (1 | g), resid.prior = point,
-                  cov.prior = NULL, REML = FALSE,
-                  weights = 1 / sigma^2));
+### Example using a residual variance prior ###
+# This is the "eight schools" data set; the mode should be at the boundary
+# of the space.
+
+control <- lmerControl(check.conv.singular = "ignore",
+                       check.nobs.vs.nRE   = "ignore",
+                       check.nobs.vs.nlev  = "ignore")
+y <- c(28, 8, -3, 7, -1, 1, 18, 12)
+sigma <- c(15, 10, 16, 11, 9, 11, 10, 18)
+g <- 1:8
+
+(schools <- blmer(y ~ 1 + (1 | g), control = control, REML = FALSE,
+                  resid.prior = point, cov.prior = NULL,
+                  weights = 1 / sigma^2))
 }
 \keyword{models}
 \keyword{methods}
