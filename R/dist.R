@@ -372,7 +372,7 @@ glmmDistributions <- list(
   custom = function(fn, chol = FALSE, scale = "none") {
     .prior <- blme:::lmmDistributions$custom
     environment(.prior) <- environment()
-    eval(substitute(.prior(fn, chol, scale), environment()),
+    eval(substitute(.prior(fn, chol, TRUE, scale), environment()),
          parent.frame())
   }
 )

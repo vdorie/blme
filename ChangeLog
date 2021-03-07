@@ -1,3 +1,7 @@
+2021-03-07 Vincent Dorie <vdorie@gmail.com>
+
+  * Fix for custom covariance priors in glmm setting not working. Bug report thanks to mgoplerud.
+
 2020-11-02 Vincent Dorie <vdorie@gmail.com>
 
   * Fix for programmatically defined variables not working with glmm priors. Bug fix thanks to mgoplerud.

@@ -43,3 +43,15 @@ test_that("bglmer runs cov prior specified using level.dim", {
   expect_equal(fit@priors$cov[[1]]@df, 2.25)
 })
 
+test_that("blmer fits test data with custom prior, matching builtin gamma", {
+  dgamma_cust <- function(x) dgamma(x, shape = 2.5, rate = 0.01, log = TRUE)
+  
+  fit.prof <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, control = control,
+                     family = binomial(),
+                     cov.prior = gamma(rate = 0.01))
+  fit.cust <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, control = control,
+                     family = binomial(),
+                     cov.prior = custom(dgamma_cust, chol = TRUE, scale = "log"))
+  expect_equal(fit.prof@theta, fit.cust@theta, tolerance = 1e-6)
+})
+
