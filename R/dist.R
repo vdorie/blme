@@ -27,12 +27,31 @@ covDistributions   <- c("flat", "wishart", "invwishart",
                         "gamma", "invgamma", "custom")
 residDistributions <- c("flat", "gamma", "invgamma", "point")
 
+# Attempts to limit the burden of having to call eval to lookup function
+# arguments every time. Distribution functions are evaluated in an
+# env that descends from the caller, so anything user-defined comes
+# from there. However, we also want them to be able to access various
+# bits of data-specific information, like the level dimension. That is
+# stored in the environment that the distribution functions are defined
+# in. In order to be able to access both, we construct an eval call
+# and use that defining environment as the enclos arg.
+eval_with_enclosure <- function(expr) {
+  expr <- match.call()$expr
+  tryResult <- tryCatch(eval(expr, parent.frame(1L)), error = function(e) e)
+  if (inherits(tryResult, "error")) {
+    expr <- parent.frame()[["matchedCall"]][[expr]]
+    eval(expr, parent.frame(1L), enclos = parent.env(parent.frame(1L)))
+  } else {
+    tryResult
+  }
+}
+
 lmmDistributions <- list(
   flat = function() NULL,
   normal = function(sd = c(10, 2.5), cov, common.scale = TRUE) {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$sd)) sd <- eval(matchedCall$sd)
-    if (!is.null(matchedCall$cov)) cov <- eval(matchedCall$cov)
+    if (!is.null(matchedCall$sd)) sd <- eval_with_enclosure(sd)
+    if (!is.null(matchedCall$cov)) cov <- eval_with_enclosure(cov)
     if (!is.null(matchedCall$sd) && !is.null(matchedCall$cov))
       warning("both sd and cov supplied to normal - only cov will be used")
     common.scale <- blme:::deparseCommonScale(common.scale)
@@ -102,9 +121,9 @@ lmmDistributions <- list(
   },
   t = function(df = 3, mean = 0, scale = c(10^2, 2.5^2), common.scale = TRUE) {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$df)) df <- eval(matchedCall$df)
-    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
-    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+    if (!is.null(matchedCall$df)) df <- eval_with_enclosure(df)
+    if (!is.null(matchedCall$mean)) mean <- eval_with_enclosure(mean)
+    if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
 
     if (df <= 0) stop("t prior requires positive degrees of freedom")
@@ -147,8 +166,9 @@ lmmDistributions <- list(
   },
   horseshoe = function(mean = 0, global.shrinkage = 2.5, common.scale = TRUE) {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$mean)) mean <- eval(matchedCall$mean)
-    if (!is.null(matchedCall$global.shrinkage)) global.shrinkage <- eval(matchedCall$global.shrinkage)
+    
+    if (!is.null(matchedCall$mean)) mean <- eval_with_enclosure(mean)
+    if (!is.null(matchedCall$global.shrinkage)) global.shrinkage <- eval_with_enclosure(global.shrinkage)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
     if (length(mean) == 1L) {
@@ -168,8 +188,8 @@ lmmDistributions <- list(
   },
   gamma = function(shape = 2.5, rate = 0, common.scale = TRUE, posterior.scale = "sd") {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
-    if (!is.null(matchedCall$rate)) rate <- eval(matchedCall$rate)
+    if (!is.null(matchedCall$shape)) shape <- eval_with_enclosure(shape)
+    if (!is.null(matchedCall$rate)) rate <- eval_with_enclosure(rate)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
     if (level.dim > 1L) {
@@ -184,8 +204,8 @@ lmmDistributions <- list(
   },
   invgamma = function(shape = 0.001, scale = shape + 0.05, common.scale = TRUE, posterior.scale = "var") {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
-    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+    if (!is.null(matchedCall$shape)) shape <- eval_with_enclosure(shape)
+    if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
     if (level.dim > 1L) {
@@ -200,8 +220,8 @@ lmmDistributions <- list(
   },
   wishart = function(df = level.dim + 2.5, scale = Inf, common.scale = TRUE, posterior.scale = "cov") {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$df)) df <- eval(matchedCall$df)
-    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+    if (!is.null(matchedCall$df)) df <- eval_with_enclosure(df)
+    if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
     
     if (df <= level.dim - 1L)
@@ -244,8 +264,8 @@ lmmDistributions <- list(
   invwishart = function(df = level.dim - 0.998, scale = diag(df + 0.1, level.dim),
                         common.scale = TRUE, posterior.scale = "cov") {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$df)) df <- eval(matchedCall$df)
-    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+    if (!is.null(matchedCall$df)) df <- eval_with_enclosure(df)
+    if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
 
     if (df <= level.dim - 1L)
@@ -287,7 +307,7 @@ lmmDistributions <- list(
   },
   point = function(value = 1.0, posterior.scale = "sd") {
     matchedCall <- match.call()
-    if (!is.null(matchedCall$value)) value <- eval(matchedCall$value)
+    if (!is.null(matchedCall$value)) value <- eval_with_enclosure(value)
 
     if (!(posterior.scale %in% c("sd", "var")))
       stop("point prior scale '", posterior.scale, "' unrecognized")
@@ -301,8 +321,8 @@ lmmDistributions <- list(
   custom = function(fn, chol = FALSE, common.scale = TRUE, scale = "none") {
     matchedCall <- match.call()
     
-    if (!is.null(matchedCall$chol)) chol <- eval(matchedCall$chol)
-    if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+    if (!is.null(matchedCall$chol)) chol <- eval_with_enclosure(chol)
+    if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
     common.scale <- blme:::deparseCommonScale(common.scale)
 
     new("bmerCustomDist", fnName = matchedCall$fn, fn = fn,
@@ -379,8 +399,8 @@ glmmDistributions <- list(
 
 residualVarianceGammaPrior <- function(shape = 0, rate = 0, posterior.scale = "var") {
   matchedCall <- match.call()
-  if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
-  if (!is.null(matchedCall$rate)) rate <- eval(matchedCall$rate)
+  if (!is.null(matchedCall$shape)) shape <- eval_with_enclosure(shape)
+  if (!is.null(matchedCall$rate)) rate <- eval_with_enclosure(rate)
 
   if (shape < 0) stop("gamma prior shape must be positive")
   if (rate  < 0) stop("gamma prior rate must be positive")
@@ -390,8 +410,8 @@ residualVarianceGammaPrior <- function(shape = 0, rate = 0, posterior.scale = "v
 
 residualVarianceInvGammaPrior <- function(shape = 0, scale = 0, posterior.scale = "var") {
   matchedCall <- match.call()
-  if (!is.null(matchedCall$shape)) shape <- eval(matchedCall$shape)
-  if (!is.null(matchedCall$scale)) scale <- eval(matchedCall$scale)
+  if (!is.null(matchedCall$shape)) shape <- eval_with_enclosure(shape)
+  if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
 
   if (shape < 0) stop("invgamma prior shape must be positive")
   if (scale < 0) stop("invgamma prior scale must be positive")

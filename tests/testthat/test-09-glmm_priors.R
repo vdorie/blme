@@ -29,6 +29,7 @@ test_that("bglmer fits test data with cov prior, matching previous version", {
 })
 
 test_that("bglmer runs with fixef horseshoe prior", {
+  skip_if_not_installed("expint")
   suppressWarnings(fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), control = control,
                                  cov.prior = NULL, fixef.prior = horseshoe))
   

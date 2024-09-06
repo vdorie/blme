@@ -20,7 +20,7 @@
   are function calls with the distinction that they are delayed in evaluation
   until information about the model is available. At that time, the functions
   are \emph{defined} in a special environment and then \emph{evaluated} in an
-  environment that directly inherits form the one in which \code{blmer} or
+  environment that directly inherits from the one in which \code{blmer} or
   \code{bglmer} was called. This is reflected in some of the
   prototypes of various prior-creating functions which depend on parameters not
   available in the top-level environment.

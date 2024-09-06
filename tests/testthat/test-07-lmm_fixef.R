@@ -98,6 +98,7 @@ test_that("blme fits test data with t prior, infinite variances", {
 })
 
 test_that("blme fits test data with horseshoe prior, shrinking coefficients close to 0", {
+  skip_if_not_installed("expint")
   fixef.prior <- "horseshoe(mean = 0, global.shrinkage = 1, common.scale = FALSE)"
   
   startingValues <- list(theta = c(0.617639687575409, -0.294806814471362, 1.35499090773928, 0.807122870503614, 0.452878790469015, 0.00511880816241064, 1.01339081390872, 0.138288121619745, 5.27691279774817e-05),

@@ -1,3 +1,7 @@
+2024-09-06 Vincent Dorie <vdorie@gmail.com>
+
+  * Fix for custom priors not being able to find variables when blmer is executed in functions. Bug report thanks to Jacob Grytzka.
+
 2021-03-07 Vincent Dorie <vdorie@gmail.com>
 
   * Fix for custom covariance priors in glmm setting not working. Bug report thanks to mgoplerud.
