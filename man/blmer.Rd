@@ -116,7 +116,7 @@ bglmer(formula, data = NULL, family = gaussian,
 }
 \seealso{
   \code{\link[lme4]{lmer}}, \code{\link[lme4]{glmer}},
-  \code{\linkS4class{merMod}} class, and \code{\link[stats]{lm}}.
+  \code{\link[lme4:merMod-class]{merMod}} class, and \code{\link[stats]{lm}}.
 }
 \examples{
 data("sleepstudy", package = "lme4")

@@ -15,7 +15,7 @@
 
 \description{The \code{bmerMod} class represents linear or generalized
   linear or nonlinear mixed-effects models with possible priors over
-  model components. It inherits from the \code{\linkS4class{merMod}}
+  model components. It inherits from the \code{\link[lme4:merMod-class]{merMod}}
   class.
 }
 
@@ -41,7 +41,7 @@
   \code{\link{blmer}} and \code{\link{bglmer}},
   which produce these objects.
   \cr
-  \code{\linkS4class{merMod}}, from which this class inherits.
+  \code{\link[lme4:merMod-class]{merMod}}, from which this class inherits.
 }
 \examples{
 showClass("bmerMod")
