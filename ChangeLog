@@ -1,3 +1,7 @@
+2025-02-28 Vincent Dorie <vdorie@gmail.com>
+
+  * Added `refitML` and synced `refit` from lme4.
+
 2024-09-06 Vincent Dorie <vdorie@gmail.com>
 
   * Fix for custom priors not being able to find variables when blmer is executed in functions. Bug report thanks to Jacob Grytzka.

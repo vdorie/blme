@@ -4,14 +4,14 @@
 lme4Version <- packageVersion("lme4")
 if (lme4Version >= "1.1-6") {
   context("refit generic for blmerMod and bglmerMod classes")
+
+  source(system.file("common", "lmmData.R", package = "blme"))
+  control <- lmerControl(optimizer = "Nelder_Mead")
+  
+  cov.prior <- "g.1 ~ wishart(scale = 2)"
+  fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), testData, cov.prior = cov.prior, control = control)
   
   test_that("refit for blmer matches original, not lmer", {
-    source(system.file("common", "lmmData.R", package = "blme"))
-    control <- lmerControl(optimizer = "Nelder_Mead")
-    
-    cov.prior <- "g.1 ~ wishart(scale = 2)"
-    fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), testData, cov.prior = cov.prior, control = control)
-      
     blmerRefit <- refit(fit)
     lmerRefit  <- getS3method("refit", "merMod")(fit)
     
@@ -20,6 +20,17 @@ if (lme4Version >= "1.1-6") {
     
     expect_false(all(abs(fit@theta - lmerRefit@theta) <= 1.0e-02))
     expect_false(all(abs(fit@beta  - lmerRefit@beta)  <= 1.0e-03))
+  })
+
+  test_that("ml refit matches ml fit", {
+    mlRefit <- refitML(fit)
+    mlFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), testData, cov.prior = cov.prior, control = control, REML = FALSE)
+
+    expect_equal(mlRefit@theta, mlFit@theta, tolerance = 1.0e-02)
+    expect_equal(mlRefit@beta,  mlFit@beta,  tolerance = 1.0e-03)
+
+    expect_false(all(abs(fit@theta - mlRefit@theta) <= 1.0e-02))
+    expect_false(all(abs(fit@beta  - mlFit@beta)  <= 1.0e-03))
   })
   
   test_that("refit for bglmer matches original, not glmer", {

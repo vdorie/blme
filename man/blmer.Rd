@@ -73,7 +73,7 @@ bglmer(formula, data = NULL, family = gaussian,
   \item \code{cov.prior = list(fc.nm ~ dist1, fc.nm ~ dist2, ..., default.distribution)}
 }
   
-  If the \dQuote{\code{factor.name ~}} construct is ommitted, the prior
+  If the \dQuote{\code{factor.name ~}} construct is omitted, the prior
   is interpretted as a default and applied to all factors that
   lack specific priors of their own. Options are not required,
   but permit fine-tuning of the model.
