@@ -24,7 +24,7 @@ importFrom(methods, setClass, setGeneric, setMethod)
 
 importFrom(stats, sd, vcov)
 importFrom(stats, gaussian, family)
-importFrom(stats, model.frame, formula)
+importFrom(stats, model.frame, model.response, formula)
 importFrom(stats, getCall, setNames)
 
 importFrom(utils, data, getS3method, packageVersion)

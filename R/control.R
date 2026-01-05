@@ -12,9 +12,16 @@ getResidPriorDFAdjustment <- function(residPrior)
   0
 }
 
+## lower triangle - 0 for diagonal, Inf for column
 getThetaLowerBoundsForDimension <- function(d) {
-  if (d == 1) return(0)
-  c(0, rep(-Inf, d - 1), getThetaLowerBoundsForDimension(d - 1))
+  if (d == 1L) return(0)
+  c(0, rep(-Inf, d - 1L), getThetaLowerBoundsForDimension(d - 1L))
+}
+
+## Inf everywhere
+getThetaUpperBoundsForDimension <- function(d) {
+  if (d == 1L) return(Inf)
+  rep(Inf, (d * (d + 1L)) %/% 2L)
 }
 
 ## TODO: this should eventually not assume the ranef structure but instead
@@ -26,6 +33,7 @@ getRanefStructure <- function(pred, resp, reTrms) {
                          numFactors = length(reTrms$cnms))
   ranefStructure$numGroupsPerFactor <- as.integer(ranefStructure$numRanefPerFactor / ranefStructure$numCoefPerFactor + 0.5)
   ranefStructure$lower <- as.numeric(unlist(sapply(ranefStructure$numCoefPerFactor, getThetaLowerBoundsForDimension)))
+  ranefStructure$upper <- as.numeric(unlist(sapply(ranefStructure$numCoefPerFactor, getThetaUpperBoundsForDimension)))
   
   ranefStructure
 }

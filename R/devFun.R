@@ -18,7 +18,7 @@ mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
   
   devFunEnv$blmerControl <- createBlmerControl(pred, resp, devFunEnv$priors)
   devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl)
-  devFunBody <- getBlmerDevianceFunctionBody(devFunEnv)
+  devFunBody <- getBlmerDevianceFunctionBody(formals(devfun), devFunEnv)
 
   if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
 
@@ -53,17 +53,24 @@ mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
   devFunEnv$blmerControl <- createBlmerControl(pred, resp, devFunEnv$priors)
   devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl)
 
-  devFunBody <- getBglmerDevianceFunctionBody(devFunEnv, nAGQ != 0L)
+  devFunBody <- getBglmerDevianceFunctionBody(formals(devfun), devFunEnv, nAGQ != 0L)
 
-  if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
+  if (!is.null(devFunBody)) body(devfun) <- parse(text=devFunBody)
   
   devfun
 }
 
-makeRefitDevFun <- function(env, nAGQ = 1L, verbose = 0, maxit=100L,
-                            control = list(),
-                            object) {
-  lme4Namespace <- asNamespace("lme4")
+makeRefitDevFun <- function(
+  env,
+  nAGQ=1L,
+  verbose=0,
+  maxit=100L,
+  control=list(),
+  object)
+{
+  lme4Version <- packageVersion("lme4")
+  lme4Namespace <- getNamespace("lme4")
+
   devfun <-
     if (packageVersion("lme4") <= "1.1.7") {
       get("mkdevfun", lme4Namespace)(env, nAGQ, verbose, control)
@@ -79,12 +86,13 @@ makeRefitDevFun <- function(env, nAGQ = 1L, verbose = 0, maxit=100L,
   env$ranefStructure <- getRanefStructure(pred, resp, list(cnms = object@cnms, Gp = object@Gp))
   env$blmerControl <- createBlmerControl(pred, resp, env$priors)
   env$parInfo <- getParInfo(pred, resp, env$ranefStructure, env$blmerControl)
+  env$upper <- if (lme4Version >= "2.0.0") getBounds(env$parInfo, "upper") else rep_len(Inf, length(env$lower))
 
   devFunBody <-
     if (is(resp, "lmerResp"))
-      getBlmerDevianceFunctionBody(env)
+      getBlmerDevianceFunctionBody(formals(devfun), env)
     else
-      getBglmerDevianceFunctionBody(env, nAGQ != 0L)
+      getBglmerDevianceFunctionBody(formals(devfun), env, nAGQ != 0L)
   
   if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
   
@@ -95,7 +103,7 @@ makeRefitDevFun <- function(env, nAGQ = 1L, verbose = 0, maxit=100L,
 updateBglmerDevfun <- function(devfun, reTrms, nAGQ = 1L) {
   devfun <- updateGlmerDevfun(devfun, reTrms, nAGQ = nAGQ)
   devFunEnv <- environment(devfun)
-  devFunBody <- getBglmerDevianceFunctionBody(devFunEnv, nAGQ != 0L)
+  devFunBody <- getBglmerDevianceFunctionBody(formals(devfun), devFunEnv, nAGQ != 0L)
 
   if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
 
@@ -103,7 +111,7 @@ updateBglmerDevfun <- function(devfun, reTrms, nAGQ = 1L) {
 }
 
 
-getBlmerDevianceFunctionBody <- function(devFunEnv)
+getBlmerDevianceFunctionBody <- function(devFunFormals, devFunEnv)
 {
   priors <- devFunEnv$priors
   
@@ -120,8 +128,10 @@ getBlmerDevianceFunctionBody <- function(devFunEnv)
   stringConnection <- textConnection("devFunBody", "w", local=TRUE)
   sink(stringConnection)
 
+  lme4Version <- packageVersion("lme4")
+
   cat("{\n")
-  cat("  expandParsInCurrentFrame(theta, parInfo)\n",
+  cat("  expandParsInCurrentFrame(", names(devFunFormals)[1L], ", parInfo)\n",
       "  pp$setTheta(as.double(theta))\n\n", sep = "")
   devFunEnv$expandParsInCurrentFrame <- expandParsInCurrentFrame
   
@@ -318,7 +328,7 @@ testGetBglmerDevianceFunctionBody <- function(devFun)
   devFunBody
 }
 
-getBglmerDevianceFunctionBody <- function(devFunEnv, fixefAreParams)
+getBglmerDevianceFunctionBody <- function(devFunFormals, devFunEnv, fixefAreParams)
 {
   priors <- devFunEnv$priors
   
@@ -337,17 +347,19 @@ getBglmerDevianceFunctionBody <- function(devFunEnv, fixefAreParams)
 
   cat("  resp$updateMu(lp0)\n")
 
+  lme4Version <- packageVersion("lme4")
+  inputArgumentName <- names(devFunFormals)[1L]
   if (!fixefAreParams) {
     cat("  spars <- rep(0, ncol(pp$X))\n",
-        "  pp$setTheta(as.double(theta))\n", sep = "")
-    if (packageVersion("lme4") <= "1.1.7") {
+        "  pp$setTheta(as.double(", inputArgumentName, "))\n", sep = "")
+    if (lme4Version <= "1.1.7") {
       cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, verbose=verbose)\n")
     } else {
       cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, maxit=maxit, verbose=verbose)\n")
     }
   } else {
-    cat("  pp$setTheta(as.double(pars[dpars]))\n",
-        "  spars <- as.numeric(pars[-dpars])\n",
+    cat("  pp$setTheta(as.double(", inputArgumentName, "[dpars]))\n",
+        "  spars <- as.numeric(", inputArgumentName, "[-dpars])\n",
         "  offset <- if (length(spars) == 0) baseOffset else baseOffset + pp$X %*% spars\n",
         "  resp$setOffset(offset)\n\n", sep = "")
     if (packageVersion("lme4") <= "1.1.7") {

@@ -1,3 +1,7 @@
+2026-01-05 Vincent Dorie <vdorie@gmail.com>
+
+  * Prepared to work with forthcoming lme4 >= 2.0.0.
+
 2025-02-28 Vincent Dorie <vdorie@gmail.com>
 
   * Added `refitML` and synced `refit` from lme4.

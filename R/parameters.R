@@ -7,21 +7,17 @@
 ## not that that should matter to a downstream user. if they care, construct it by
 ## index
 
-## for models with a single parameter vector, the name "theta" is sufficient
-## so we can return without further analysis
 expandParsInCurrentFrame <- function(parVector, parInfo) {
-  if (length(parInfo) == 1) return(invisible(NULL))
-  
   parentEnv <- parent.frame()
   parNames <- names(parInfo)
   
-  index <- 0
-  for (i in 1:length(parInfo)) {
+  offset <- 0
+  for (i in seq_along(parInfo)) {
     parLength <- parInfo[[i]]$length
     parName <- parNames[[i]]
 
-    parentEnv[[parName]] <- parVector[index + 1:parLength]
-    index <- index + parLength
+    parentEnv[[parName]] <- parVector[offset + seq_len(parLength)]
+    offset <- offset + parLength
   }
   invisible(NULL)
 }
@@ -30,7 +26,14 @@ getStartingValues <- function(userStart, devFunEnv, parInfo) {
   if (is.null(userStart)) userStart <- list()
   if (is.numeric(userStart)) userStart <- list(theta = userStart)
   if (is.list(userStart) && length(userStart) == 1 &&
-      is.null(names(userStart))) names(userStart) <- "theta"
+      is.null(names(userStart))) names(userStart) <- "par"
+
+  if (length(parPos <- which(names(userStart) == "par")) >= 1)
+  {
+    names(userStart)[parPos] <- "theta"
+  }
+  if (length(fixefPos <- which(names(userStart) == "fixef")) >= 1)
+    names(userStart)[fixefPos] <- "beta"
   
   invalidStartingValues <- !(names(userStart) %in% names(parInfo))
   if (any(invalidStartingValues))
@@ -39,7 +42,7 @@ getStartingValues <- function(userStart, devFunEnv, parInfo) {
 
   start <- numeric(sum(sapply(parInfo, function(par.i) par.i$length)))
   offset <- 0L
-  for (i in 1:length(parInfo)) {
+  for (i in seq_along(parInfo)) {
     parName <- names(parInfo)[[i]]
     parLength <- parInfo[[i]]$length
 
@@ -63,12 +66,13 @@ getStartingValues <- function(userStart, devFunEnv, parInfo) {
 }
 
 extractParameterListFromFit <- function(fit, blmerControl) {
-  result <- list(theta = fit@theta)
+  lme4Version <- packageVersion("lme4")
+  result <- if (lme4Version >= "2.0.0") list(par = fit@theta) else list(theta = fit@theta)
   if (blmerControl$fixefOptimizationType == FIXEF_OPTIM_NUMERIC) {
     if (fit@devcomp$dims[["GLMM"]] != 0L)
-      result$fixef <- fit@beta
+      result$beta <- fit@beta
     else
-      result$beta  <- fit@beta
+      result$beta <- fit@beta
   }
   if (fit@devcomp$dims[["GLMM"]] == 0L && blmerControl$fixefOptimizationType == SIGMA_OPTIM_NUMERIC) {
     result$sigma <- if (fit@devcomp$dims[["REML"]] == 0L) fit@devcomp$cmp[["sigmaML"]] else fit@devcomp$cmp[["sigmaREML"]]
@@ -76,16 +80,21 @@ extractParameterListFromFit <- function(fit, blmerControl) {
   result
 }
 
-getLowerBounds <- function(parInfo) {
+getBounds <- function(parInfo, direction) {
   result <- numeric(sum(sapply(parInfo, function(par.i) par.i$length)))
   offset <- 0L
-  for (i in 1:length(parInfo)) {
+  for (i in seq_along(parInfo)) {
     parName <- names(parInfo)[[i]]
     parLength <- parInfo[[i]]$length
-    parLower <- parInfo[[i]]$lower
-    if (parLength != length(parLower)) stop("length of lower bounds for parameter '", parName, "' does not equal length of vector")
+    bound <- parInfo[[i]][[direction]]
+    if (parLength != length(bound)) {
+      stop(
+        "length of ", direction, " bounds for parameter '", parName,
+        "' does not equal length of vector"
+      )
+    }
 
-    result[offset + 1:parLength] <- parLower
+    result[offset + 1:parLength] <- bound
     offset <- offset + parLength
   }
   
@@ -93,28 +102,43 @@ getLowerBounds <- function(parInfo) {
 }
 
 getParInfo <- function(pred, resp, ranefStructure, blmerControl) {
-  numPars <- 1
-  result <- list(theta = list(length = ranefStructure$numCovParameters,
-                   lower = ranefStructure$lower,
-                   default = function(devFunEnv) pred$theta))
-  
+  numPars <- 1L
+  lme4Version <- packageVersion("lme4")
+  result <- list(
+    theta=list(
+      length=ranefStructure$numCovParameters,
+      lower=ranefStructure$lower,
+      default=function(devFunEnv) pred$theta
+    )
+  )
+
+  if (lme4Version >= "2.0.0")
+    result$theta$upper <- ranefStructure$upper
+
   if (blmerControl$fixefOptimizationType == FIXEF_OPTIM_NUMERIC) {
-    numPars <- numPars + 1
-    numFixef <- if (length(pred$X) > 0) ncol(pred$X) else 0
-    result[[numPars]] <-
-      list(length = numFixef,
-             lower = rep(-Inf, numFixef),
-             default = function(devFunEnv) pred$beta0 + pred$delb)
+    numPars <- numPars + 1L
+    numFixef <- if (length(pred$X) > 0L) ncol(pred$X) else 0L
+    result[[numPars]] <- list(
+      length=numFixef,
+      lower=rep(-Inf, numFixef),
+      default=function(devFunEnv) pred$beta0 + pred$delb
+    )
+    if (lme4Version >= "2.0.0")
+      result[[numPars]]$upper <- rep(Inf, numFixef)
     names(result)[[numPars]] <- "beta"
   }
   if (blmerControl$sigmaOptimizationType == SIGMA_OPTIM_NUMERIC) {
-    numPars <- numPars + 1
-    result[[numPars]] <-
-      list(length = 1L,
-             lower = 0,
-             default = function(devFunEnv) sd(resp$y))
+    numPars <- numPars + 1L
+    result[[numPars]] <- list(
+      length=1L,
+      lower=0,
+      default=function(devFunEnv) sd(resp$y)
+    )
+    if (lme4Version >= "2.0.0")
+      result[[numPars]]$upper <- Inf
     names(result)[[numPars]] <- "sigma"
   }
-  
+
   result
 }
+
