@@ -1,6 +1,6 @@
 2026-01-05 Vincent Dorie <vdorie@gmail.com>
 
-  * Prepared to work with forthcoming lme4 >= 2.0.0.
+  * Now compatible with lme4 >= 2.0.0.
 
 2025-02-28 Vincent Dorie <vdorie@gmail.com>
 
