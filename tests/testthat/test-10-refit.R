@@ -20,6 +20,9 @@ if (lme4Version >= "1.1-6") {
     
     expect_false(all(abs(fit@theta - lmerRefit@theta) <= 1.0e-02))
     expect_false(all(abs(fit@beta  - lmerRefit@beta)  <= 1.0e-03))
+    
+    ## REML adjustment depends on the number of fixed effects
+    expect_equal(blmerRefit@devcomp$cmp[["REML"]], fit@devcomp$cmp[["REML"]], tolerance = 1.0e-4)
   })
 
   test_that("ml refit matches ml fit", {
@@ -31,6 +34,32 @@ if (lme4Version >= "1.1-6") {
 
     expect_false(all(abs(fit@theta - mlRefit@theta) <= 1.0e-02))
     expect_false(all(abs(fit@beta  - mlFit@beta)  <= 1.0e-03))
+  })
+
+  test_that("ml refit takes refit arguments and numerically optimized sigma", {
+    fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), testData, cov.prior = cov.prior, control = control,
+                 fixef.prior = normal(common.scale = FALSE))
+    mlRefit <- refitML(fit, maxit = 50L)
+    mlFit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1), testData, cov.prior = cov.prior, control = control,
+                   fixef.prior = normal(common.scale = FALSE), REML = FALSE)
+    
+    expect_false(is.na(logLik(mlRefit)))
+    expect_equal(mlRefit@theta, mlFit@theta, tolerance = 1.0e-02)
+    expect_equal(sigma(mlRefit), sigma(mlFit), tolerance = 1.0e-03)
+    
+    ## control goes to the optimizer, as in lme4
+    mlRefit <- suppressWarnings(refitML(fit, control = list(maxfun = 5L)))
+    expect_equal(mlRefit@optinfo$feval, 5L)
+  })
+  
+  test_that("refit for bglmer with nAGQ = 0 matches original", {
+    source(system.file("common", "glmmData.R", package = "blme"))
+    
+    fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), nAGQ = 0)
+    bglmerRefit <- refit(fit)
+    
+    expect_equal(fit@theta, bglmerRefit@theta, tolerance = 1.0e-2)
+    expect_equal(fit@beta,  bglmerRefit@beta,  tolerance = 1.0e-3)
   })
   
   test_that("refit for bglmer matches original, not glmer", {

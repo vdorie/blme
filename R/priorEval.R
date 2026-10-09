@@ -152,8 +152,8 @@ evaluatePriorArguments <- function(covPriors, fixefPrior, residPrior,
   }
   
   result$fixefPrior <- evaluateFixefPrior(fixefPrior, defnEnv, evalEnv)
-  if ((is(result$fixefPrior, "bmerTDist") || is(result$fixefPrior, "bmerHorseshoeDist")) && isLMM && dims[["REML"]] > 0L)
-    stop("t/horseshoe distribution for fixed effects only supported when REML = FALSE")
+  if (isNumericFixefPrior(result$fixefPrior) && isLMM && dims[["REML"]] > 0L)
+    stop("t/independent_ts/horseshoe distribution for fixed effects only supported when REML = FALSE")
   result$covPriors  <- evaluateCovPriors(covPriors, factorColumnNames, numGroupsPerFactor, defnEnv, evalEnv, callingEnv)
 
   if (isLMM) {

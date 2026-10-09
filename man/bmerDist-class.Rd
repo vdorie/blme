@@ -76,6 +76,24 @@
     At present, \code{t} priors cannot be used with the \code{REML = TRUE} argument
     as that implies an integral without a closed form solution.
 
+    \item \code{independent_ts(df = 3, mean = 0, scale = c(10^2, 2.5^2), common.scale = TRUE)}
+
+    Applies independent, univariate t priors to each fixed effect, as opposed to the
+    single multivariate distribution of the \code{t} prior. Under the multivariate
+    prior, a large value for one coefficient weakens the shrinkage applied to all of the
+    others; independent priors shrink each coefficient separately. See
+    \cite{Gelman et al. (2008)} in the references.
+
+    \code{df}, \code{mean}, and \code{scale} follow the same recycling rules as
+    \code{mean} for the \code{t} prior: length 1 is repeated for every fixed effect,
+    length 2 applies the first element to the intercept and repeats the second for all
+    slopes, and otherwise the length must equal the number of fixed effects. Degrees of
+    freedom must be positive. \code{scale} is on the variance scale and must be positive;
+    infinite values impose a flat prior on that component.
+
+    The same restrictions on numeric optimization and \code{REML} that apply to the
+    \code{t} prior also apply here.
+
     \item \code{horseshoe(mean = 0, global.shrinkage = 2.5, common.scale = TRUE)}
     
     The horseshoe shrinkage prior is implemented similarly to the \code{t} prior, in
@@ -167,6 +185,11 @@
 Carvalho, Carlos M., Nicholas G. Polson, and James G. Scott.
   "Handling Sparsity via the Horseshoe."
   AISTATS. Vol. 5. 2009.
+
+Gelman, Andrew, Aleks Jakulin, Maria Grazia Pittau, and Yu-Sung Su.
+  "A Weakly Informative Default Prior Distribution for Logistic and Other Regression Models."
+  The Annals of Applied Statistics 2.4 (2008): 1360-1383.
+  \doi{10.1214/08-AOAS191}
 }
 
 \seealso{

@@ -97,6 +97,49 @@ test_that("blme fits test data with t prior, infinite variances", {
   expect_true(abs(fit2@beta[2L]) > abs(fit1@beta[2L]))
 })
 
+test_that("independent_ts prior deviance is the sum of univariate t deviances", {
+  fit <- blmer(y ~ x.1 + x.2 + (1 | g.1), testData, REML = FALSE,
+               cov.prior = NULL, fixef.prior = NULL, resid.prior = NULL)
+  fixef.prior <- blme:::parsePrior(fit, fixef.prior = "independent_ts(df = c(1, 3, 7), mean = 1, scale = c(Inf, 2.5^2, 2^2), common.scale = FALSE)")
+  
+  expect_equal(toString(fixef.prior),
+               "independent_ts(df = c(1, 3, 7), mean = 1, scale = c(Inf, 6.25, 4), common.scale = FALSE)")
+  
+  beta <- c(0.3, -2, 5)
+  priorDeviance <- blme:::getConstantTerm(fixef.prior) + blme:::getExponentialTerm(fixef.prior, beta)[2L]
+  ## intercept has infinite scale, so is flat
+  expect_equal(priorDeviance,
+               -2 * sum(dt((beta[-1L] - 1) / c(2.5, 2), c(3, 7), log = TRUE) - log(c(2.5, 2))))
+})
+
+test_that("blmer fits test data with independent_ts prior, matching t prior in one dimension", {
+  for (common.scale in c(FALSE, TRUE)) {
+    fit1 <- blmer(y ~ 1 + (1 + x.1 | g.2), testData, REML = FALSE, control = control, cov.prior = NULL,
+                  fixef.prior = t(3, mean = 2, scale = 0.5, common.scale = common.scale))
+    fit2 <- blmer(y ~ 1 + (1 + x.1 | g.2), testData, REML = FALSE, control = control, cov.prior = NULL,
+                  fixef.prior = independent_ts(3, mean = 2, scale = 0.5, common.scale = common.scale))
+    
+    expect_equal(fit2@beta, fit1@beta, tolerance = 1.0e-6)
+    expect_equal(fit2@theta, fit1@theta, tolerance = 1.0e-6)
+    expect_equal(sigma(fit2), sigma(fit1), tolerance = 1.0e-6)
+  }
+})
+
+test_that("blmer converges when sigma is numerically optimized", {
+  ## the objective is NaN at sigma = 0, which used to stop optimizers early or,
+  ## for t priors, raise an error
+  fit.flat <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                    testData, REML = FALSE, control = control,
+                    cov.prior = NULL, fixef.prior = NULL)
+  for (fixef.prior in c("normal(common.scale = FALSE)", "t", "independent_ts")) {
+    expect_warning(fit <- blmer(y ~ x.1 + x.2 + (1 + x.1 | g.1) + (1 + x.1 + x.2 | g.2),
+                                testData, REML = FALSE, control = control,
+                                cov.prior = NULL, fixef.prior = fixef.prior), NA)
+    expect_equal(sigma(fit), sigma(fit.flat), tolerance = 0.01)
+    expect_length(fit@optinfo$val, length(fit@theta))
+  }
+})
+
 test_that("blme fits test data with horseshoe prior, shrinking coefficients close to 0", {
   skip_if_not_installed("expint")
   fixef.prior <- "horseshoe(mean = 0, global.shrinkage = 1, common.scale = FALSE)"

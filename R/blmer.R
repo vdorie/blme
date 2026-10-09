@@ -104,11 +104,14 @@ blmer <- function(formula, data = NULL, REML = TRUE,
   rho <- environment(devfun)
 
   nobs <- nrow(lmod$fr)
-  npar <- length(rho$lower)
+  ## rho$lower only covers theta; blme can also optimize over beta and sigma
+  npar <- length(getBounds(rho$parInfo, "lower"))
   calc.derivs <- control$calc.derivs
+  ## derivatives are only needed to check convergence, which can be disabled
   if (is.null(calc.derivs)) {
     calc.derivs <- (
-      nobs < control$checkConv$check.conv.nobsmax
+      !is.null(control$checkConv)
+      && nobs < control$checkConv$check.conv.nobsmax
       && npar < control$checkConv$check.conv.nparmax
     )
   }
@@ -133,7 +136,7 @@ blmer <- function(formula, data = NULL, REML = TRUE,
         control=control$optCtrl,
         verbose=verbose,
         start=start,
-        calc.derivs=control$calc.derivs,
+        calc.derivs=calc.derivs,
         force.calc.derivs=if (!is.null(control$calc.derivs)) control$calc.derivs else FALSE,
         use.last.params=control$use.last.params
       )
@@ -284,15 +287,22 @@ bglmer <- function(
     if (!is.null(start$fixef) && nAGQ==0)
       stop("should not specify both start$fixef and nAGQ==0")
   }
+  thetaLower <- rho$parInfo$theta$lower
+  thetaDefault <- rho$parInfo$theta$default(rho)
+  if (is.numeric(start) && length(start) == length(thetaLower)) {
+    start <- moveStartInsideBounds(start, thetaLower, thetaDefault)
+  } else if (is.list(start) && length(start$theta) == length(thetaLower)) {
+    start$theta <- moveStartInsideBounds(start$theta, thetaLower, thetaDefault)
+  }
+  ## fixed effects are profiled out when nAGQ = 0, so can't have a prior
+  if (nAGQ == 0L && !is.null(rho$priors$fixefPrior))
+    stop("fixef.prior requires nAGQ > 0")
   
-  if (
-    lme4Version <= "1.1-7"
-    || identical(control$nAGQ0initStep, TRUE)
-    || (
-      lme4Version >= "2.0.0"
-      && nAGQinit == 0L
-    )
-  ) {
+  runInitStep <-
+    lme4Version <= "1.1-7" ||
+    identical(control$nAGQ0initStep, TRUE) ||
+    (lme4Version >= "2.0.0" && nAGQinit == 0L)
+  if (runInitStep) {
     if (lme4Version >= "2.0.0") {
       start0 <-
         if (nAGQ > 0L && is.list(start) && !is.null(names(start)))
@@ -320,21 +330,27 @@ bglmer <- function(
   }
 
   if (nAGQ > 0L) {
-    ## update deviance function to include fixed effects as inputs
-    devfun <- updateBglmerDevfun(devfun, glmod$reTrms, nAGQ = nAGQ)
+    ## update deviance function to include fixed effects as inputs; for lme4 >= 2.0.0,
+    ## mkGlmerDevfun has already done so if the nAGQ = 0 step was skipped
+    if (runInitStep || lme4Version < "2.0.0")
+      devfun <- updateBglmerDevfun(devfun, glmod$reTrms, nAGQ = nAGQ)
     if (devFunOnly) return(devfun)
-    if (lme4Version >= '2.0.0') {
-      start <- get("updateStart", lme4Namespace)(start,par=opt$par)
-    } else {
-      start <- get("updateStart", lme4Namespace)(start,theta=opt$par)
+    if (runInitStep) {
+      if (lme4Version >= '2.0.0') {
+        start <- get("updateStart", lme4Namespace)(start,par=opt$par)
+      } else {
+        start <- get("updateStart", lme4Namespace)(start,theta=opt$par)
+      }
     }
   }
 
   nobs <- nrow(glmod$fr)
   npar <- length(rho$lower)
   calc.derivs <- control$calc.derivs
+  ## derivatives are only needed to check convergence, which can be disabled
   if (is.null(calc.derivs)) calc.derivs <-
-      (nobs < control$checkConv$check.conv.nobsmax &&
+      (!is.null(control$checkConv) &&
+       nobs < control$checkConv$check.conv.nobsmax &&
        npar < control$checkConv$check.conv.nparmax)
   
   
@@ -354,14 +370,14 @@ bglmer <- function(
     if (!is.null(formals(optimizeGlmer)$boundary.tol))
       args$boundary.tol <- control$boundary.tol
     if (!is.null(formals(optimizeGlmer)[["..."]])) {
-      args$calc.derivs <- control$calc.derivs
+      args$calc.derivs <- calc.derivs
       args$use.last.params <- control$use.last.params
     }
     ## reoptimize deviance function over covariance parameters and fixed effects
     opt <- do.call(optimizeGlmer, args, TRUE)
   }
 
-  cc <- if (!is.null(control$calc.derivs) && !control$calc.derivs) NULL else {
+  cc <- if (!calc.derivs) NULL else {
     if (exists("checkConv", lme4Namespace)) {
       if (verbose > 10) cat("checking convergence\n")
       checkConv <- get("checkConv", lme4Namespace)
@@ -372,7 +388,7 @@ bglmer <- function(
         lbound=rho$lower
       )
       if ("ubound" %in% names(formals(checkConv)))
-        args$ubound <- rho$lower
+        args$ubound <- rho$upper
       if ("nobs" %in% names(formals(checkConv)))
         args$nobs <- nobs
       if ("ndim" %in% names(formals(checkConv)))
@@ -432,19 +448,25 @@ repackageMerMod <- function(merMod, opt, devFunEnv) {
     
     if (blmerControl$sigmaOptimizationType == SIGMA_OPTIM_POINT) sigma <- priors$residPrior@value
   } else {
-    beta <- opt$par[-devFunEnv$dpars]
+    ## with nAGQ = 0, the fixed effects aren't optimizer parameters
+    beta <- if (is.null(devFunEnv$dpars) || length(opt$par) <= length(devFunEnv$dpars))
+      merMod@beta
+    else
+      opt$par[-devFunEnv$dpars]
   }
   
   if (!is.null(merMod@optinfo)) {
     lme4Version <- packageVersion("lme4")
-    parLength <- devFunEnv$parInfo$theta$length + if (!isLMM) devFunEnv$parInfo$beta$length else 0
-    if (parLength != length(merMod@optinfo$val)) {
+    parLength <- devFunEnv$parInfo$theta$length
+    if (!isLMM && !is.null(devFunEnv$parInfo$beta)) parLength <- parLength + devFunEnv$parInfo$beta$length
+    ## with nAGQ = 0, beta is in parInfo but profiled out
+    if (parLength < length(merMod@optinfo$val)) {
       merMod@optinfo$val_full    <- merMod@optinfo$val
       merMod@optinfo$derivs_full <- merMod@optinfo$derivs
       
-      merMod@optinfo$val <- merMod@optinfo$val[parLength]
-      merMod@optinfo$derivs$gradient <- merMod@optinfo$derivs$gradient[parLength]
-      merMod@optinfo$derivs$Hessian <- merMod@optinfo$derivs$Hessian[parLength, parLength, drop = FALSE]
+      merMod@optinfo$val <- merMod@optinfo$val[seq_len(parLength)]
+      merMod@optinfo$derivs$gradient <- merMod@optinfo$derivs$gradient[seq_len(parLength)]
+      merMod@optinfo$derivs$Hessian <- merMod@optinfo$derivs$Hessian[seq_len(parLength), seq_len(parLength), drop = FALSE]
     }
   }
   
@@ -741,7 +763,7 @@ refit.bmerMod <- function(
 
 
   rr <- if (isLMM(object))
-    mkRespMod(model.frame(object), REML = isREML(object))
+    mkRespMod(model.frame(object), REML = object@resp$REML)
   else if (isGLMM(object)) {
     modelFrame <- model.frame(object) ## NOTE: blme change
     if (lme4Version <= "1.1-6") modelFrame$mustart <- object@resp$mu
@@ -774,19 +796,18 @@ refit.bmerMod <- function(
   }
   
   glmerPwrssUpdate <- get("glmerPwrssUpdate", lme4Namespace)
+  ## lme4 >= 2.1-0 profiles dispersion parameters within the update
+  hasDispersionArgs <- "dispProfile" %in% names(formals(glmerPwrssUpdate))
   if (isGLMM(object)) {
     GQmat <- GHrule(nAGQ)
-    if (nAGQ <= 1) {
-      if (lme4Version <= "1.1-7")
-        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat)
-      else
-        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat, maxit = maxit)
-    } else {
-      if (lme4Version <= "1.1-7")
-        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat, grpFac = object@flist[[1]])
-      else
-        glmerPwrssUpdate(pp, rr, control$tolPwrss, GQmat, maxit = maxit, grpFac = object@flist[[1]])
+    args <- list(pp, rr, control$tolPwrss, GQmat)
+    if (lme4Version > "1.1-7") args$maxit <- maxit
+    if (nAGQ > 1) args$grpFac <- object@flist[[1]]
+    if (hasDispersionArgs) {
+      args$dispProfile <- identical(if (is.null(control$disp_method)) "moment" else control$disp_method, "moment")
+      args$maxPhiIter  <- as.integer(if (is.null(control$maxPhiIter)) 100L else control$maxPhiIter)
     }
+    do.call(glmerPwrssUpdate, args)
   }
   ## .Call(glmerLaplace, pp$ptr(), rr$ptr(), nAGQ,
   ## control$tolPwrss, as.integer(30), verbose)
@@ -819,6 +840,14 @@ refit.bmerMod <- function(
           fac = object@flist[[1]],
           verbose=verbose,
           dpars=seq_len(get("getParLength", lme4Namespace)(object)))
+      },
+      ## recover the original fit's dispersion settings, falling back to the
+      ## lme4 defaults for objects fitted before they were stored
+      if (isGLMM(object) && hasDispersionArgs) {
+        list(
+          dispProfile = { v <- dc$dims["dispProfile"]; if (is.na(v)) TRUE else as.logical(v) },
+          maxPhiIter  = { v <- dc$dims["maxPhiIter"];  if (is.na(v)) 100L else as.integer(v) },
+          qEff        = { v <- dc$dims["qEff"];        if (is.na(v)) NA_real_ else as.double(v) })
       }
     )
   } else {
@@ -856,7 +885,7 @@ refit.bmerMod <- function(
   ## NOTE: blme changes start
   ff <- makeRefitDevFun(rho, nAGQ = nAGQ, verbose = verbose, maxit = maxit, object = object)
   reTrms <- list(flist = object@flist, cnms = object@cnms, Gp = object@Gp, lower = object@lower)
-  if (isGLMM(object))
+  if (isGLMM(object) && nAGQ > 0L)
     ff <- updateBglmerDevfun(ff, reTrms, nAGQ)
   
   ## commenting out xst (not used) and x0, which we grab elsewhere
@@ -938,9 +967,6 @@ refitML.bmerMod <- function (x, optimizer="bobyqa", ...) {
   # NOTE: blme changes start
   l... <- list(...)
 
-  if (!all(names(l...) %in% c("control", "verbose", "maxit")))
-    warning("additional arguments to refitML.bmerMod ignored")
-
   ctrl.arg <- NULL
   if ("control" %in% names(l...)) ctrl.arg <- l...$control
   control <- getRefitControl(x, ctrl.arg)
@@ -971,14 +997,25 @@ refitML.bmerMod <- function (x, optimizer="bobyqa", ...) {
 
   # NOTE: blme changes start
   devfun <- makeRefitDevFun(rho, verbose=verbose, maxit=maxit, control=control, object=x)
-  ## NOTE: blme changes end
   
+  ## control, verbose, and remaining arguments go to optwrap, as in lme4;
+  ## parameters can include beta and sigma in addition to theta, so take
+  ## start and bounds from parInfo
+  l... <- l...[!names(l...) %in% c("control", "verbose", "maxit")]
+  l...$control <- if (inherits(ctrl.arg, "merControl")) ctrl.arg$optCtrl else ctrl.arg
+  l...$verbose <- verbose
+  start <- getStartingValues(
+    extractParameterListFromFit(x, rho$blmerControl),
+    rho,
+    rho$parInfo
+  )
   optwrap <- get("optwrap", lme4Namespace)
   opt <- ## "smart" calc.derivs rules
-      if(optimizer == "bobyqa" && !any("calc.derivs" == ...names()))
-          optwrap(optimizer, devfun, x@theta, lower=x@lower, calc.derivs=TRUE, ...)
+      if(optimizer == "bobyqa" && !any("calc.derivs" == names(l...)))
+          do.call(optwrap, c(list(optimizer, devfun, start, lower=rho$lower, upper=rho$upper, calc.derivs=TRUE), l...))
       else
-          optwrap(optimizer, devfun, x@theta, lower=x@lower, ...)
+          do.call(optwrap, c(list(optimizer, devfun, start, lower=rho$lower, upper=rho$upper), l...))
+  ## NOTE: blme changes end
   ## FIXME: Should be able to call mkMerMod() here, and be done
   n <- length(rr$y)
   pp <- rho$pp

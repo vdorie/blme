@@ -22,10 +22,16 @@ setMethod("getExponentialTerm", "ANY", function(object, ...) c(0, 0))
 setMethod("getPolynomialTerm", "ANY", function(object, ...) 0)
           
 
-fixefDistributions <- c("flat", "normal", "t", "horseshoe")
+fixefDistributions <- c("flat", "normal", "t", "independent_ts", "horseshoe")
 covDistributions   <- c("flat", "wishart", "invwishart",
                         "gamma", "invgamma", "custom")
 residDistributions <- c("flat", "gamma", "invgamma", "point")
+
+## fixef priors that are not conjugate and so require that the fixed effects
+## be numerically optimized
+isNumericFixefPrior <- function(fixefPrior)
+  is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerIndependentTsDist") ||
+    is(fixefPrior, "bmerHorseshoeDist")
 
 # Attempts to limit the burden of having to call eval to lookup function
 # arguments every time. Distribution functions are evaluated in an
@@ -163,6 +169,34 @@ lmmDistributions <- list(
     }
     
     new("bmerTDist", commonScale = common.scale, df = df, beta.0 = mean, d = d, R.scale.inv = R.scale.inv)
+  },
+  independent_ts = function(df = 3, mean = 0, scale = c(10^2, 2.5^2), common.scale = TRUE) {
+    matchedCall <- match.call()
+    if (!is.null(matchedCall$df)) df <- eval_with_enclosure(df)
+    if (!is.null(matchedCall$mean)) mean <- eval_with_enclosure(mean)
+    if (!is.null(matchedCall$scale)) scale <- eval_with_enclosure(scale)
+    common.scale <- blme:::deparseCommonScale(common.scale)
+    
+    ## length 1 applies to all, length 2 is intercept and then slopes
+    expandToFixef <- function(x, name) {
+      if (length(x) == 1L) return(rep_len(x, p))
+      if (length(x) == 2L && p > 1L) return(c(x[1L], rep_len(x[2L], p - 1L)))
+      if (length(x) != p) stop("independent_ts prior ", name, " of improper length")
+      x
+    }
+    df    <- expandToFixef(df, "df")
+    mean  <- expandToFixef(mean, "mean")
+    scale <- expandToFixef(scale, "scale")
+    
+    if (any(df <= 0)) stop("independent_ts prior requires positive degrees of freedom")
+    if (any(scale <= 0)) stop("independent_ts prior requires positive scale")
+    
+    ## infinite scales are flat in that component, and have sqrt.scale.inv of 0
+    sqrt.scale.inv <- 1 / sqrt(scale)
+    d <- sum(is.finite(scale))
+    
+    new("bmerIndependentTsDist", commonScale = common.scale, df = df, beta.0 = mean, d = d,
+        sqrt.scale.inv = sqrt.scale.inv)
   },
   horseshoe = function(mean = 0, global.shrinkage = 2.5, common.scale = TRUE) {
     matchedCall <- match.call()
@@ -350,6 +384,13 @@ glmmDistributions <- list(
   },
   t = function(df = 3, mean = 0, scale = c(10^2, 2.5^2)) {
     .prior <- blme:::lmmDistributions$t
+    environment(.prior) <- environment()
+    
+    eval(substitute(.prior(df, mean, scale, FALSE), environment()),
+         parent.frame()) 
+  },
+  independent_ts = function(df = 3, mean = 0, scale = c(10^2, 2.5^2)) {
+    .prior <- blme:::lmmDistributions$independent_ts
     environment(.prior) <- environment()
     
     eval(substitute(.prior(df, mean, scale, FALSE), environment()),

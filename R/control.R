@@ -24,6 +24,26 @@ getThetaUpperBoundsForDimension <- function(d) {
   rep(Inf, (d * (d + 1L)) %/% 2L)
 }
 
+## covariance priors have infinite deviance when the covariance is singular,
+## which derails the optimizers if they step onto the boundary, so keep the
+## diagonal strictly positive for any factor with a prior
+getThetaLowerBounds <- function(ranefStructure, covPriors) {
+  result <- ranefStructure$lower
+  offset <- 0L
+  for (i in seq_len(ranefStructure$numFactors)) {
+    d <- ranefStructure$numCoefPerFactor[i]
+    numPars <- (d * (d + 1L)) %/% 2L
+    if (i <= length(covPriors) && is(covPriors[[i]], "bmerDist")) {
+      lower.i <- result[offset + seq_len(numPars)]
+      lower.i[lower.i == 0] <- sqrt(.Machine$double.eps)
+      result[offset + seq_len(numPars)] <- lower.i
+    }
+    offset <- offset + numPars
+  }
+  
+  result
+}
+
 ## TODO: this should eventually not assume the ranef structure but instead
 ## suck it from Lind and theta, if possible
 getRanefStructure <- function(pred, resp, reTrms) {
@@ -70,7 +90,7 @@ getFixefOptimizationType <- function(pred, resp, priors)
   
   fixefPrior <- priors$fixefPrior
   
-  if (is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerHorseshoeDist")) return(FIXEF_OPTIM_NUMERIC)
+  if (isNumericFixefPrior(fixefPrior)) return(FIXEF_OPTIM_NUMERIC)
 
   FIXEF_OPTIM_LINEAR
 }
@@ -96,7 +116,7 @@ getSigmaOptimizationType <- function(resp, priors)
   
   if (is(fixefPrior, "bmerNormalDist") && fixefPrior@commonScale == FALSE)
     return(SIGMA_OPTIM_NUMERIC)
-  if ((is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerHorseshoeDist")) && fixefPrior@commonScale == TRUE)
+  if (isNumericFixefPrior(fixefPrior) && fixefPrior@commonScale == TRUE)
     return(SIGMA_OPTIM_NUMERIC)
   
   exponentialTerms <- c()

@@ -1,3 +1,20 @@
+2026-10-09 Vincent Dorie <vdorie@gmail.com>
+
+  * Added `independent_ts` fixed effects prior, which applies independent univariate t distributions to each coefficient.
+  * Fixed optimizers stopping early, with convergence warnings, when the residual standard deviation is numerically optimized (e.g. `normal(common.scale = FALSE)`, or `t` and `horseshoe` with `common.scale = TRUE`). The objective was NaN on the boundary at 0; `t` priors raised an error there instead.
+  * Fixed optimizers stopping early when stepping onto the boundary of the covariance parameters, where most covariance priors have infinite deviance. This affected fits using the default `wishart` prior.
+  * Fixed `optinfo` of fits with additional optimized parameters keeping only the last covariance parameter instead of all of them.
+  * Fixed `bglmer` always reporting a singular fit and skipping its convergence checks. Fits may now give convergence warnings that were previously suppressed.
+  * Fixed `bglmer` failing with `nAGQ = 0`, and with `nAGQ0initStep = FALSE` and starting values. A fixed effects prior with `nAGQ = 0`, where it can have no effect, is now an error.
+  * Fixed `refit` using the wrong REML adjustment for models with more than one fixed effect; synced from lme4.
+  * Fixed `refitML` with numerically optimized fixed effects or residual standard deviation, and with `maxit`, `verbose`, or `control` arguments, the latter two of which are now passed to the optimizer as in lme4.
+  * Fixed `refit` and `refitML` not starting from the fitted residual standard deviation when it is numerically optimized.
+  * Derivatives for convergence checks are now skipped for large models, as in lme4.
+  * Synced with lme4 2.1-0's dispersion parameter controls for `bglmer` and `refit`, and its boundary restart check.
+  * Structured covariance terms from lme4 >= 2.0.0, e.g. `diag` or `ar1`, now raise an error as they are not supported.
+  * Fixed missing parenthesis when printing `t` priors on more than four fixed effects.
+  * Updated tests for lme4 2.1-0.
+
 2026-01-05 Vincent Dorie <vdorie@gmail.com>
 
   * Prepared to work with forthcoming lme4 >= 2.0.0.

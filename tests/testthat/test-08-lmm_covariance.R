@@ -134,3 +134,23 @@ test_that("blmer not confused by cov priors supplied in different forms", {
   expect_is(suppressWarnings(blmer(y ~ x.1 + x.2 + (1 | g.1), testData, cov.prior = wishart, control = control)), "blmerMod")
   expect_is(suppressWarnings(blmer(y ~ x.1 + x.2 + (1 | g.1), testData, cov.prior = wishart(), control = control)), "blmerMod")
 })
+
+test_that("blmer with default prior converges when optimizer reaches the boundary", {
+  ## the wishart prior has infinite deviance on the boundary, which used to stop
+  ## optimizers early
+  for (optimizer in c("nloptwrap", "bobyqa")) {
+    expect_warning(fit <- blmer(y ~ x.1 + (1 + x.1 | g.1), testData, REML = FALSE,
+                                control = lmerControl(optimizer = optimizer)), NA)
+    expect_equal(fit@devcomp$cmp[["dev"]] + fit@devcomp$cmp[["penalty"]], 581.185409, tolerance = 1.0e-6)
+  }
+})
+
+test_that("blmer accepts starting values on the boundary", {
+  ## priors bound the covariance away from singular, e.g. starting from a singular lmer fit
+  fit0 <- blmer(y ~ x.1 + (1 | g.1), testData, cov.prior = gamma)
+  for (optimizer in c("nloptwrap", "Nelder_Mead")) {
+    expect_warning(fit <- blmer(y ~ x.1 + (1 | g.1), testData, start = 0, cov.prior = gamma,
+                                control = lmerControl(optimizer = optimizer)), NA)
+    expect_equal(fit@theta, fit0@theta, tolerance = 1.0e-4)
+  }
+})

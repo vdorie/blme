@@ -43,3 +43,11 @@ test_that("cov.prior argument raises appropriate errors", {
                     cov.prior = NULL, fixef.prior = NULL, resid.prior = NULL)
   expect_warning(parsePrior(blmerFit, "gamma"))
 })
+
+test_that("structured covariance terms raise an error", {
+  skip_if(packageVersion("lme4") < "2.0.0")
+  source(system.file("common", "lmmData.R", package = "blme"))
+  
+  expect_error(blmer(y ~ x.1 + diag(1 + x.1 | g.1), testData), "structured covariance")
+  expect_is(blmer(y ~ x.1 + (1 + x.1 || g.1), testData), "blmerMod")
+})

@@ -62,6 +62,16 @@ getStartingValues <- function(userStart, devFunEnv, parInfo) {
     
     offset <- offset + parLength
   }
+  moveStartInsideBounds(start, getBounds(parInfo, "lower"),
+                        unlist(lapply(parInfo, function(par.i) par.i$default(devFunEnv))))
+}
+
+## values on the boundary, e.g. from a singular fit, can be at or outside of
+## the bounds that priors impose, where the objective is infinite, so replace
+## them with defaults
+moveStartInsideBounds <- function(start, lower, default) {
+  outside <- start < lower | (start == lower & lower > 0)
+  start[outside] <- default[outside]
   start
 }
 
@@ -74,7 +84,7 @@ extractParameterListFromFit <- function(fit, blmerControl) {
     else
       result$beta <- fit@beta
   }
-  if (fit@devcomp$dims[["GLMM"]] == 0L && blmerControl$fixefOptimizationType == SIGMA_OPTIM_NUMERIC) {
+  if (fit@devcomp$dims[["GLMM"]] == 0L && blmerControl$sigmaOptimizationType == SIGMA_OPTIM_NUMERIC) {
     result$sigma <- if (fit@devcomp$dims[["REML"]] == 0L) fit@devcomp$cmp[["sigmaML"]] else fit@devcomp$cmp[["sigmaREML"]]
   }
   result
@@ -101,13 +111,13 @@ getBounds <- function(parInfo, direction) {
   result
 }
 
-getParInfo <- function(pred, resp, ranefStructure, blmerControl) {
+getParInfo <- function(pred, resp, ranefStructure, blmerControl, priors) {
   numPars <- 1L
   lme4Version <- packageVersion("lme4")
   result <- list(
     theta=list(
       length=ranefStructure$numCovParameters,
-      lower=ranefStructure$lower,
+      lower=getThetaLowerBounds(ranefStructure, priors$covPriors),
       default=function(devFunEnv) pred$theta
     )
   )
@@ -129,10 +139,12 @@ getParInfo <- function(pred, resp, ranefStructure, blmerControl) {
   }
   if (blmerControl$sigmaOptimizationType == SIGMA_OPTIM_NUMERIC) {
     numPars <- numPars + 1L
+    ## the objective is NaN at sigma = 0, which derails the optimizers if they
+    ## step onto the boundary, so keep sigma strictly positive
     result[[numPars]] <- list(
       length=1L,
-      lower=0,
-      default=function(devFunEnv) sd(resp$y)
+      lower=sqrt(.Machine$double.eps) * sd(resp$y * sqrt(resp$weights)),
+      default=function(devFunEnv) sd(resp$y * sqrt(resp$weights))
     )
     if (lme4Version >= "2.0.0")
       result[[numPars]]$upper <- Inf

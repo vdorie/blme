@@ -72,12 +72,19 @@ optimizeLmer <- function(devfun,
   )
   
   if (restart_edge) {
-    ## FIXME: should we be looking at rho$pp$theta or opt$par
-    ##  at this point???  in koller example (for getData(13)) we have
-    ##   rho$pp$theta=0, opt$par=0.08
-    theta0 <- if (lme4Version >= "2.0.0") rho$mkPar(rho$pp$theta) else rho$pp$theta
-    par0 <- opt$par
-    par0[seq_along(theta0)] <- theta0
+    ## check the parameters the model state will be left at; with
+    ## use.last.params = TRUE, lme4 >= 2.1-0 records the last ones evaluated,
+    ## which may be on the boundary even when opt$par is not
+    par0 <- attr(opt, "last_par")
+    if (is.null(par0) && lme4Version >= "2.1-0") par0 <- opt$par
+    if (is.null(par0)) {
+      ## FIXME: should we be looking at rho$pp$theta or opt$par
+      ##  at this point???  in koller example (for getData(13)) we have
+      ##   rho$pp$theta=0, opt$par=0.08
+      theta0 <- if (lme4Version >= "2.0.0") rho$mkPar(rho$pp$theta) else rho$pp$theta
+      par0 <- opt$par
+      par0[seq_along(theta0)] <- theta0
+    }
 
     if (any(
       length(wl <- which(par0 == lowerBounds)) > 0L |

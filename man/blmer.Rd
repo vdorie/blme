@@ -28,7 +28,8 @@ bglmer(formula, data = NULL, family = gaussian,
     \code{invgamma}, or \code{NULL}. Imposes a prior over the covariance of the random
     effects/modeled coefficients. Default is \code{wishart}. The \code{NULL} argument
     imposes flat priors over all relevant parameters.}
-  \item{fixef.prior}{a BLME prior of family \code{normal}, \code{t}, \code{horseshoe}, or \code{NULL}.
+  \item{fixef.prior}{a BLME prior of family \code{normal}, \code{t}, \code{independent_ts},
+    \code{horseshoe}, or \code{NULL}.
     Imposes a prior over the fixed effects/modeled coefficients.
     Default is \code{NULL}.}
   \item{resid.prior}{a BLME prior of family \code{gamma}, \code{invamma}, \code{point}
@@ -55,6 +56,9 @@ bglmer(formula, data = NULL, family = gaussian,
   do Bayesian inference or penalized maximum likelihood, with priors imposed on the different
   model components. For the specifics of any distribution listed below,
   see the \link[=bmerDist-class]{distributions} page.
+
+  Structured covariance terms, such as \code{diag}, \code{cs}, and \code{ar1}, available
+  in \pkg{lme4} version 2.0.0 and later, are not currently supported.
   
   \strong{Covariance Prior}
   
@@ -100,7 +104,8 @@ bglmer(formula, data = NULL, family = gaussian,
 \itemize{\item \code{fixef.prior = multivariate.distribution(options1 = value1, \dots)}}
   
   At present, the implemented multivariate distributions are \code{normal}, \code{t},
-  \code{horseshoe}, and \code{NULL}. \code{t} and \code{horseshoe} priors cannot be used
+  \code{independent_ts}, \code{horseshoe}, and \code{NULL}. \code{t}, \code{independent_ts},
+  and \code{horseshoe} priors cannot be used
   when \code{REML} is \code{TRUE}, as that integral does not have a closed form solution.
 
   \strong{Residual Variance Prior}

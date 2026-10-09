@@ -12,6 +12,7 @@ S3method(refitML, bmerMod)
 
 S3method(toString, bmerNormalDist)
 S3method(toString, bmerTDist)
+S3method(toString, bmerIndependentTsDist)
 S3method(toString, bmerHorseshoeDist)
 S3method(toString, bmerPointDist)
 S3method(toString, bmerWishartDist)

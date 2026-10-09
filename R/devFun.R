@@ -1,6 +1,18 @@
+## lme4 >= 2.0.0 supports structured covariances, for which theta isn't the
+## lower triangle of a Cholesky factor as the priors and bounds assume
+checkCovarianceStructure <- function(reTrms) {
+  if (is.null(reTrms$reCovs)) return(invisible(NULL))
+  
+  isUnstructured <- vapply(reTrms$reCovs, function(reCov) class(reCov)[1L] == "Covariance.us", logical(1L))
+  if (!all(isUnstructured))
+    stop("structured covariance terms (e.g. diag, cs, ar1) are not supported by blme")
+  invisible(NULL)
+}
+
 mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
                           verbose = 0L, control = lmerControl(), priors = NULL,
                           env = parent.frame(1L), ...) {
+  checkCovarianceStructure(reTrms)
   devfun <- mkLmerDevfun(fr, X, reTrms, REML, start, verbose, control, ...)
   devFunEnv <- environment(devfun)
   pred <- devFunEnv$pp
@@ -17,7 +29,7 @@ mkBlmerDevfun <- function(fr, X, reTrms, REML = TRUE, start = NULL,
                            env)
   
   devFunEnv$blmerControl <- createBlmerControl(pred, resp, devFunEnv$priors)
-  devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl)
+  devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl, devFunEnv$priors)
   devFunBody <- getBlmerDevianceFunctionBody(formals(devfun), devFunEnv)
 
   if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
@@ -29,6 +41,7 @@ mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
                            maxit = 100L,
                            control=glmerControl(),
                            priors = NULL, env = parent.frame(1L), ...) {
+  checkCovarianceStructure(reTrms)
   devfun <-
     if (packageVersion("lme4") <= "1.1.7") {
      mkGlmerDevfun(fr, X, reTrms, family, nAGQ, verbose, control, ...)
@@ -51,11 +64,12 @@ mkBglmerDevfun <- function(fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,
 
   
   devFunEnv$blmerControl <- createBlmerControl(pred, resp, devFunEnv$priors)
-  devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl)
+  devFunEnv$parInfo <- getParInfo(pred, resp, devFunEnv$ranefStructure, devFunEnv$blmerControl, devFunEnv$priors)
 
   devFunBody <- getBglmerDevianceFunctionBody(formals(devfun), devFunEnv, nAGQ != 0L)
 
   if (!is.null(devFunBody)) body(devfun) <- parse(text=devFunBody)
+  setThetaLowerBounds(devFunEnv)
   
   devfun
 }
@@ -81,11 +95,14 @@ makeRefitDevFun <- function(
   resp <- env$resp
   
   env$maxit <- as.integer(maxit)
-  env$lower <- object@lower
   env$priors <- object@priors
   env$ranefStructure <- getRanefStructure(pred, resp, list(cnms = object@cnms, Gp = object@Gp))
   env$blmerControl <- createBlmerControl(pred, resp, env$priors)
-  env$parInfo <- getParInfo(pred, resp, env$ranefStructure, env$blmerControl)
+  ## with nAGQ = 0, the fixed effects are profiled out
+  if (!is(resp, "lmerResp") && nAGQ == 0L)
+    env$blmerControl$fixefOptimizationType <- FIXEF_OPTIM_LINEAR
+  env$parInfo <- getParInfo(pred, resp, env$ranefStructure, env$blmerControl, env$priors)
+  env$lower <- getBounds(env$parInfo, "lower")
   env$upper <- if (lme4Version >= "2.0.0") getBounds(env$parInfo, "upper") else rep_len(Inf, length(env$lower))
 
   devFunBody <-
@@ -106,8 +123,17 @@ updateBglmerDevfun <- function(devfun, reTrms, nAGQ = 1L) {
   devFunBody <- getBglmerDevianceFunctionBody(formals(devfun), devFunEnv, nAGQ != 0L)
 
   if (!is.null(devFunBody)) body(devfun) <- parse(text = devFunBody)
+  setThetaLowerBounds(devFunEnv)
 
   devfun
+}
+
+## lme4's glmer optimizer takes its bounds from the environment, which
+## updateGlmerDevfun resets, so impose any prior-dependent theta bounds there
+setThetaLowerBounds <- function(devFunEnv) {
+  thetaLower <- devFunEnv$parInfo$theta$lower
+  devFunEnv$lower[seq_along(thetaLower)] <- thetaLower
+  invisible(NULL)
 }
 
 
@@ -243,7 +269,7 @@ calculatePriorExponentialTerms <- function(priors, beta, Lambda.ts, sigma = NULL
   residPrior <- priors$residPrior
 
   if (!is.null(fixefPrior)) {
-    if ((is(fixefPrior, "bmerTDist") || is(fixefPrior, "bmerHorseshoeDist")) && fixefPrior@commonScale == TRUE) {
+    if (isNumericFixefPrior(fixefPrior) && fixefPrior@commonScale == TRUE) {
       term <- getExponentialTerm(fixefPrior, beta, sigma)
     } else {
       term <- getExponentialTerm(fixefPrior, beta)
@@ -349,13 +375,19 @@ getBglmerDevianceFunctionBody <- function(devFunFormals, devFunEnv, fixefArePara
 
   lme4Version <- packageVersion("lme4")
   inputArgumentName <- names(devFunFormals)[1L]
+  ## lme4 >= 2.1-0 profiles dispersion parameters within the update
+  dispersionArgs <-
+    if ("dispProfile" %in% names(formals(devFunEnv$pwrssUpdate)))
+      ", dispProfile=dispProfile, maxPhiIter=maxPhiIter, qEff=qEff"
+    else ""
   if (!fixefAreParams) {
     cat("  spars <- rep(0, ncol(pp$X))\n",
         "  pp$setTheta(as.double(", inputArgumentName, "))\n", sep = "")
     if (lme4Version <= "1.1.7") {
       cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, verbose=verbose)\n")
     } else {
-      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, maxit=maxit, verbose=verbose)\n")
+      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GHrule(0L), compDev, maxit=maxit, verbose=verbose",
+          dispersionArgs, ")\n", sep = "")
     }
   } else {
     cat("  pp$setTheta(as.double(", inputArgumentName, "[dpars]))\n",
@@ -365,7 +397,8 @@ getBglmerDevianceFunctionBody <- function(devFunFormals, devFunEnv, fixefArePara
     if (packageVersion("lme4") <= "1.1.7") {
       cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, verbose=verbose)\n")
     } else {
-      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, maxit=maxit, verbose=verbose)\n")
+      cat("  p <- pwrssUpdate(pp, resp, tolPwrss, GQmat, compDev, fac, maxit=maxit, verbose=verbose",
+          dispersionArgs, ")\n", sep = "")
     }
   }
   

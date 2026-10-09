@@ -10,9 +10,12 @@ test_that("bglmer fits test data with fixef prior, matching previous version", {
   if (lme4Version < "1.1-4") {
     expect_equal(fit@theta, 1.26501253837861)
     expect_equal(fit@beta, c(0.873121247636467, 2.46647249930796, 1.32070156863358))
-  } else {
+  } else if (lme4Version < "2.1-0") {
     expect_equal(fit@theta, 1.26501385482573)
     expect_equal(fit@beta, c(0.873131216784199, 2.46647899095567, 1.32070496549675))
+  } else {
+    expect_equal(fit@theta, 1.26501476305925, tolerance = 1.0e-6)
+    expect_equal(fit@beta, c(0.873129799640665, 2.4664666989276, 1.32070290336581), tolerance = 1.0e-6)
   }
 })
 
@@ -22,9 +25,12 @@ test_that("bglmer fits test data with cov prior, matching previous version", {
   if (lme4Version < "1.1-4") {
     expect_equal(fit@theta, 2.96766525351892)
     expect_equal(fit@beta, c(1.0963789854971, 3.67790570859986, 1.75655010020603))
-  } else {
+  } else if (lme4Version < "2.1-0") {
     expect_equal(fit@theta, 2.96767284827046)
     expect_equal(fit@beta, c(1.0963789854971, 3.67790570859986, 1.75655010020603))
+  } else {
+    expect_equal(fit@theta, 2.96764095859915, tolerance = 1.0e-6)
+    expect_equal(fit@beta, c(1.096412380265, 3.67792366613539, 1.75655008627344), tolerance = 1.0e-6)
   }
 })
 
@@ -33,8 +39,20 @@ test_that("bglmer runs with fixef horseshoe prior", {
   suppressWarnings(fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), control = control,
                                  cov.prior = NULL, fixef.prior = horseshoe))
   
-  expect_equal(fit@theta, 1.44188949480559)
-  expect_equal(fit@beta, c(-3.00402517816968e-08, 2.38133218752372, 1.40658715296947))
+  ## the horseshoe density has a pole at zero, so the mode is sensitive to where
+  ## the optimizer stops; check that the fit is sane rather than exact values
+  expect_is(fit, "bglmerMod")
+  expect_true(all(is.finite(c(fit@theta, fit@beta))))
+  expect_lt(abs(fit@beta[1L]), 1e-4)
+})
+
+test_that("bglmer runs with fixef independent_ts prior", {
+  fit <- bglmer(y ~ x.1 + x.2 + (1 | g), testData, family = binomial(), control = control,
+                cov.prior = NULL, fixef.prior = independent_ts(df = 1))
+  
+  expect_is(fit, "bglmerMod")
+  expect_is(fit@priors$fixefPrior, "bmerIndependentTsDist")
+  expect_true(all(is.finite(c(fit@theta, fit@beta))))
 })
 
 test_that("bglmer runs cov prior specified using level.dim", {

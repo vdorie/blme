@@ -21,7 +21,7 @@ toString.bmerTDist <- function(x, digits = getOption("digits"), ...) {
   if (all(scale[lower.tri(scale) | upper.tri(scale)] == 0)) {
     scale <- diag(scale)
     if (length(scale) > 4L) {
-      scaleString <- paste0("diag(scale) = c(", toString(round(scale[seq_len(4L)], digits)), ", ...")
+      scaleString <- paste0("diag(scale) = c(", toString(round(scale[seq_len(4L)], digits)), ", ...)")
     } else if (length(scale) == 1L) {
       scaleString <- paste0("scale = ", toString(round(scale[1L], digits)))
     } else {
@@ -65,7 +65,11 @@ setMethod("getExponentialTerm", "bmerTDist",
     df <- object@df
 
     dist <- tcrossprod(crossprod(beta - beta.0, R.scale.inv))[1L]
-    if (object@commonScale == TRUE && !is.null(sigma)) dist <- dist / sigma^2
+    if (object@commonScale == TRUE && !is.null(sigma)) {
+      ## density is 0 at sigma = 0; sigma is bounded away from it during optimization
+      if (sigma <= 0) return(c(0, Inf))
+      dist <- dist / sigma^2
+    }
     if (any(is.na(dist)) || any(is.infinite(dist))) stop("non-finite or NA result in t-prior")
     
     exponential <- (df + d) * log(1 + dist / df)
